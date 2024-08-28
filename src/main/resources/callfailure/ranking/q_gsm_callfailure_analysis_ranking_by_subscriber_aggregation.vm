@@ -1,0 +1,39 @@
+##
+## GSM Call Failure Ranking Analysis by Subscriber  (using aggregation tables)
+##
+## Velocity Parameter: 
+##		
+##		:CATEGORY_ID:   Corresponding event id for Subscriber
+##
+## Named PreparedStatement Parameter:
+##
+##     :dateFrom   starting time
+##     :dateTo     ending time
+##
+
+#set($aggregationView=$TECH_PACK_LIST.getTechPack("EVENT_E_GSM_CFA").getPlainAggregationView())
+
+SELECT
+	
+	#if($count > 0)
+	  top $count
+	#end
+	RANK()
+	Over (order by failures desc) AS Rank,
+	aggView.IMSI AS 'IMSI',
+	SUM(isnull(NO_OF_ERRORS,0)) AS Failures
+
+FROM
+
+	$aggregationView as aggView
+	
+WHERE
+    aggView.IMSI is not null
+    and aggView.IMSI <> 0
+    and aggView.CATEGORY_ID = :CATEGORY_ID
+	and #GET_DATETIME_RANGE()
+
+GROUP BY
+	
+	aggView.IMSI
+	

@@ -1,0 +1,11 @@
+##=============================================================================
+##
+## Cause code query returning all codes for the gsm cfa cause code table
+##
+##=============================================================================
+select
+    CAUSE_GROUP_DESC
+from
+    DIM_E_GSM_CFA_CAUSE_GROUP
+order by
+    CAUSE_GROUP

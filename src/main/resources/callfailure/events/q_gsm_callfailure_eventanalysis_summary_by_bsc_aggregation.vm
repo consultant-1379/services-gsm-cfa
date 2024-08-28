@@ -1,0 +1,114 @@
+##
+## GSM Call Failure Analysis BSC event summary (using aggregation tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :HIER3_ID   The hash id of the controller(BSC)
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	VENDOR AS 'RAN Vendor',
+	HIERARCHY_3 AS 'Controller',
+	CATEGORY_ID_DESC AS 'Event Type',
+	NO_OF_FAILURES AS 'Failures', 
+	IMPACTED_SUBSCRIBERS AS 'Impacted Subscribers',
+	IMPACTED_CELLS AS 'Impacted Cells',
+	case when ((isnull(total_failure,0) + isnull(NUMBER_OF_SUCCECCES,0)) != 0)
+	then
+    	cast (round((( cast(isnull(NO_OF_FAILURES,0) as decimal(10,2)) / 
+    		   ( cast(isnull(total_failure,0) as decimal(10,2)) + cast(isnull(NUMBER_OF_SUCCECCES,0) as decimal(10,2)))) * 
+    		     100),2) as numeric(5,2) )
+	else
+		null
+	end as 'Error Ratio',
+	aggView.CATEGORY_ID as 'CATEGORY_ID',
+	:HIER3_ID as 'HIER3_ID'
+from
+(
+	select 
+		sum(NO_OF_SUCCESSES)
+	from
+		$sucAggregationView as tempSuc
+	where	
+		tempSuc.HIER3_ID = :HIER3_ID
+		and
+		#GET_DATETIME_RANGE()
+)as succesAggregation(NUMBER_OF_SUCCECCES),
+(
+	select 
+		CATEGORY_ID, sum(NO_OF_ERRORS), count(distinct hier321_id)
+	from 
+		$errAggregationView as tempAgg
+	where	
+		tempAgg.HIER3_ID = :HIER3_ID
+		and
+		#GET_DATETIME_RANGE()
+	group by
+		CATEGORY_ID
+) 
+as aggView(CATEGORY_ID, NO_OF_FAILURES, IMPACTED_CELLS)	
+left outer join
+(
+	select count(distinct rawview.IMSI), CATEGORY_ID from
+		(
+    		#foreach ($rawtable in $rawtables)
+    			select			
+    				IMSI, CATEGORY_ID		
+    			from dc.$rawtable
+    			where
+					HIER3_ID = :HIER3_ID
+					and #GET_DATETIME_RANGE()
+					and #GET_TAC_EXCLUSION()
+    			#if($velocityCount < $rawtables.size())
+    					union all
+    			#end
+    		#end
+    	) as rawview
+
+	group by
+		CATEGORY_ID
+) 
+as subscribers(IMPACTED_SUBSCRIBERS, CATEGORY_ID)
+on 
+(		
+	aggView.CATEGORY_ID = subscribers.CATEGORY_ID
+)
+	inner join
+	(
+		select 
+			CATEGORY_ID, 
+			CATEGORY_ID_DESC
+		from 
+			DIM_E_GSM_CFA_EVENTTYPE
+	)
+	as category on aggView.CATEGORY_ID=category.CATEGORY_ID
+	,
+	( 
+		select 
+			distinct HIERARCHY_3,VENDOR 
+		from 
+			DIM_E_SGEH_HIER321
+		where 
+			RAT=0
+			and HIER3_ID = :HIER3_ID
+	) as hier_table
+	,
+	(
+		select 
+			sum(NO_OF_ERRORS) as total_failure
+		from 
+			$errAggregationView
+		where	
+			HIER3_ID = :HIER3_ID
+		and
+			#GET_DATETIME_RANGE()
+	) as errtotalresult_data
+order by CATEGORY_ID Desc
+
+	

@@ -1,0 +1,30 @@
+##
+## GSM Call Failure Cause Code Analysis by Controller Group (using raw tables)
+##
+## Velocity Parameter: 
+##
+## Named PreparedStatement Parameter:
+##
+##	   :HIER3_ID          :   The controller hash id
+##	   :groupname         :   The controller group name
+##     $errAggregationView: Error aggregation view
+##
+select	
+	ccref.CAUSE_GROUP as 'Cause Group ID',
+	ccref.CAUSE_GROUP_DESC as 'Cause Group'
+from
+    $errAggregationView errRef,
+    DIM_E_GSM_CFA_CAUSE_GROUP as ccref,
+    GROUP_TYPE_E_RAT_VEND_HIER3 controllerGroup
+where
+    #GET_DATETIME_RANGE()
+    and controllerGroup.GROUP_NAME = :groupname
+    and controllerGroup.HIER3_ID = errRef.HIER3_ID	 
+	and errRef.CAUSE_GROUP is not null
+    and errRef.CAUSE_GROUP = ccref.CAUSE_GROUP
+group by
+	ccref.CAUSE_GROUP,
+	ccref.CAUSE_GROUP_DESC
+order by
+	ccref.CAUSE_GROUP
+	

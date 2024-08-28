@@ -1,0 +1,119 @@
+##
+## GSM Call Failure Analysis TAC event summary (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :TAC  TAC of terminal
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($rawSuccesTables=$TECH_PACK_LIST.getAllRawSucTables())
+
+SELECT
+	#if($count > 0)
+	  top $count
+	#end
+	topology.VENDOR_NAME AS 'Terminal Make',
+	topology.MARKETING_NAME AS 'Model',
+	category.CATEGORY_ID_DESC AS 'Event Type',
+	result_data.failures AS 'Failures',
+	result_data.impacted_subscribers AS 'Impacted Subscribers',
+	case when ((isnull(total_failure,0) + isnull(successfulCalls,0)) != 0)
+	then
+		cast (round((( cast(failures as decimal(10,2)) / 
+	       ( cast(isnull(total_failure,0) as decimal(10,2)) + cast(isnull(successfulCalls,0) as decimal(10,2)))) * 
+	         100),2)  as numeric(5,2) )
+	else
+		null
+	end as 'Failure Ratio',
+	result_data.CATEGORY_ID AS 'CATEGORY_ID',
+	:TAC AS 'TAC'
+FROM
+	(
+		select 
+			count (*) as failures,
+			:TAC as TAC,
+			CATEGORY_ID,
+			count (distinct IMSI) as impacted_subscribers
+		from 
+			(
+        		#foreach ($rawtable in $rawtables)
+        			select			
+        				CATEGORY_ID, IMSI		
+        			from 
+						dc.$rawtable raw
+        			where
+						raw.tac = :TAC 
+						and #GET_DATETIME_RANGE()
+						and #GET_TAC_EXCLUSION()
+        			#if($velocityCount < $rawtables.size())
+        					union all
+        			#end
+        		#end
+        	) as rawview			
+		group by rawview.CATEGORY_ID
+	) 
+	as result_data,
+	(
+		select 
+			TAC,
+			VENDOR_NAME,
+			MARKETING_NAME
+		from 
+			DIM_E_SGEH_TAC
+		where
+		    TAC = :TAC
+	)
+	as topology,
+	(
+		select 
+			CATEGORY_ID, 
+			CATEGORY_ID_DESC
+		from 
+			DIM_E_GSM_CFA_EVENTTYPE
+	)
+	as category,
+	(
+		select 
+			count(1)
+		from
+		(
+        	#foreach ($succesRawTable in $rawSuccesTables)
+        		select			
+        			TAC	
+        		from dc.$succesRawTable
+				where
+					TAC = :TAC
+					and #GET_DATETIME_RANGE()
+					and #GET_TAC_EXCLUSION()
+        		#if($velocityCount < $rawSuccesTables.size())
+        				union all
+        		#end
+        	#end
+		) as tmpRawSuceesses
+	)as rawsuccesses(successfulCalls),
+	(
+		select 
+			count(1)
+		from
+		(
+        	#foreach ($errRawTable in $rawtables)
+        		select			
+        			TAC	
+        		from dc.$errRawTable
+				where
+					TAC = :TAC
+					and #GET_DATETIME_RANGE()
+					and #GET_TAC_EXCLUSION()
+        		#if($velocityCount < $rawtables.size())
+        				union all
+        		#end
+        	#end
+		) as tmpRawError
+	)as totalrawerrors(total_failure)
+WHERE
+	result_data.CATEGORY_ID = category.CATEGORY_ID
+AND
+	result_data.TAC *= topology.TAC
+ORDER BY CATEGORY_ID DESC

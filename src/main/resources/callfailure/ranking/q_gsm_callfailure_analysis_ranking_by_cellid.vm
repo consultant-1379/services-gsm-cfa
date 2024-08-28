@@ -1,0 +1,57 @@
+##
+## GSM Call Failure Analysis Access Area Ranking (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :dateFrom   starting time
+##     :dateTo     ending time
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawTables())
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	rank() over (order by failures desc) as Rank,
+	VENDOR AS 'RAN Vendor',
+	HIERARCHY_3 AS 'Controller',
+	HIERARCHY_1 AS 'Access Area',	
+	failures,
+	hier_table.HIER321_ID
+from
+	(
+		select 
+			HIER321_ID, 
+			count (*) as failures
+		from 	
+			(
+        		#foreach ($rawtable in $rawtables)
+        			select			
+						HIER321_ID		
+        			from 
+						dc.$rawtable
+        			where
+						HIER321_ID is not null
+						and #GET_DATETIME_RANGE()
+						and #GET_TAC_EXCLUSION()
+        			#if($velocityCount < $rawtables.size())
+        					union all
+        			#end
+        		#end
+        	) as rawview
+		group by 
+			HIER321_ID
+	) 
+	as result_data
+	left outer join
+	( 
+		select 
+			distinct HIERARCHY_3,HIER321_ID,VENDOR,HIERARCHY_1 
+		from 
+			DIM_E_SGEH_HIER321
+		where 
+			RAT=0
+	) 
+	as hier_table on result_data.HIER321_ID = hier_table.HIER321_ID	

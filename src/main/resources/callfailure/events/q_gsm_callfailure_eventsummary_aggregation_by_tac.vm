@@ -1,0 +1,110 @@
+##
+## GSM Call Failure Analysis Terminal event summary (using aggregation tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :TAC  TAC of terminal
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+
+SELECT
+	#if($count > 0)
+	  top $count
+	#end
+	topology.VENDOR_NAME AS 'Terminal Make',
+	topology.MARKETING_NAME AS 'Model',
+	category.CATEGORY_ID_DESC AS 'Event Type',
+	failures AS 'Failures',
+	impacted_subscribers AS 'Impacted Subscribers',
+	case when (isnull(total_failure,0)+isnull(NUMBER_OF_SUCCECCES,0)) != 0
+		then cast(round((convert(double,isnull(failures,0))/convert(double,(isnull(total_failure,0)+isnull(NUMBER_OF_SUCCECCES,0)))*100),2) as decimal(5,2))
+		else null 	   	
+    	end as 'Failure Ratio',
+	aggView.CATEGORY_ID AS 'CATEGORY_ID',
+	:TAC AS 'TAC'
+FROM
+	(
+    	select 
+    		CATEGORY_ID, 
+    		
+    		sum(NO_OF_ERRORS)
+    	from 
+    		$errAggregationView as tempAgg
+    	where	
+    		tempAgg.TAC = :TAC
+    	and
+    		#GET_DATETIME_RANGE()
+    	group by
+    		CATEGORY_ID
+    ) 
+	as aggView(CATEGORY_ID,  Failures),
+	(
+    	select count(distinct rawview.IMSI), 
+    		   
+    		   CATEGORY_ID 
+    	from
+    		(
+        		#foreach ($rawtable in $rawtables)
+        			select			
+        				IMSI, CATEGORY_ID		
+        			from dc.$rawtable
+        			where
+    					TAC = :TAC
+    				and #GET_DATETIME_RANGE()
+    				and #GET_TAC_EXCLUSION()
+        			#if($velocityCount < $rawtables.size())
+        					union all
+        			#end
+        		#end
+        	) as rawview
+    
+    	group by
+    		CATEGORY_ID
+	) 
+	as subscribers(IMPACTED_SUBSCRIBERS,  CATEGORY_ID),
+	(
+		select 
+			TAC,
+			VENDOR_NAME,
+			MARKETING_NAME
+		from 
+			DIM_E_SGEH_TAC
+		where
+		    TAC = :TAC
+	)
+	as topology,
+	(
+		select 
+			CATEGORY_ID, 
+			CATEGORY_ID_DESC
+		from 
+			DIM_E_GSM_CFA_EVENTTYPE
+	)
+	as category,
+	(
+		select 
+			sum(NO_OF_SUCCESSES)
+		from
+			$sucAggregationView as tempSuc
+		where	
+			tempSuc.TAC = :TAC
+			and
+			#GET_DATETIME_RANGE()
+    )as succesAggregation(NUMBER_OF_SUCCECCES),
+	(
+		select 
+			sum(NO_OF_ERRORS)
+		from
+			$errAggregationView as tempErr
+		where	
+			tempErr.TAC = :TAC
+			and
+			#GET_DATETIME_RANGE()
+    )as totalErrAggregation(total_failure)
+WHERE
+	aggView.CATEGORY_ID = category.CATEGORY_ID
+AND
+	aggView.CATEGORY_ID = subscribers.CATEGORY_ID 
+ORDER BY CATEGORY_ID DESC

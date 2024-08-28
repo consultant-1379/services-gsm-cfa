@@ -1,0 +1,30 @@
+##
+## GSM Call Failure Analysis Access Area Ranking (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :dateFrom   starting time
+##     :dateTo     ending time
+##
+
+#set($columnsToSelect=["URGENCY_CONDITION, EVENT_ID"])
+
+SELECT 
+	#if($count > 0)
+	  top $count
+	#end
+	RANK() Over (ORDER BY Failures DESC) AS Rank, 
+	dim.URGENCY_CONDITION_DESC AS 'Cause Code Description', 
+	aggView.URGENCY_CONDITION AS 'Cause Code ID', 
+	sum(isnull(aggView.NO_OF_ERRORS, 0)) AS Failures
+FROM	
+	$errAggregationView as aggView,
+	DIM_E_GSM_CFA_URGENCY_CONDITION as dim
+WHERE
+	dim.URGENCY_CONDITION = aggView.URGENCY_CONDITION AND 
+	aggView.CATEGORY_ID = $categoryId AND
+	#GET_DATETIME_RANGE()
+GROUP BY 
+	dim.URGENCY_CONDITION_DESC,
+	aggView.URGENCY_CONDITION

@@ -1,0 +1,43 @@
+##
+## GSM Data Connection Success Cause Code Analysis by Subscriber Group (using raw tables)
+## It returns cause code info for success events only
+##		
+## Named PreparedStatement Parameter:
+##
+##	   :groupname:   
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawTablesWithMeasurementType())
+
+select 
+    events.TBF_RELEASE_CAUSE as cc_id, 
+    dimCC.TBF_RELEASE_CAUSE_DESC as cc_desc,
+    isnull(sum(NO_OF_SUCCESSES),0) as NO_OF_OCCURRENCES
+from 
+    (
+		#foreach ($rawtable in $rawtables)
+			select			
+				raw.IMSI, 
+				TBF_RELEASE_CAUSE, 
+				NO_OF_SUCCESSES		
+			from 
+				dc.$rawtable raw,
+				GROUP_TYPE_E_IMSI groups 
+            WHERE 
+                NO_OF_SUCCESSES        	<> 0 
+                and groups.GROUP_NAME   = :groupname 
+                and raw.IMSI            = groups.IMSI 
+    			and #GET_DATETIME_RANGE()
+    			and #GET_TAC_EXCLUSION()
+			#if($velocityCount < $rawtables.size())
+					union all
+			#end
+		#end
+	) as events
+    , dc.DIM_E_GSM_PS_TBF_RELEASE_CAUSE dimCC 
+where 
+	dimCC.TBF_RELEASE_CAUSE = events.TBF_RELEASE_CAUSE
+group by events.TBF_RELEASE_CAUSE,dimCC.TBF_RELEASE_CAUSE_DESC	
+
+
+

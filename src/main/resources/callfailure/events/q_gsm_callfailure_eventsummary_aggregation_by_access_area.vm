@@ -1,0 +1,102 @@
+##
+## GSM Call Failure Analysis Access Area Event Summary Aggregation
+##
+## Velocity Parameter: 
+##		HIER321_ID:  Cell Hash Id
+##
+## Named PreparedStatement Parameter:
+##
+##     dateFrom:   starting time
+##     dateTo:     ending time
+##
+
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+
+SELECT 
+	#if($count > 0)
+	  top $count
+	#end
+	VENDOR AS 'RAN Vendor', 
+	HIERARCHY_3 AS 'Controller', 
+	CATEGORY_ID_DESC As 'Event Type', 
+	NO_OF_FAILURES AS 'Failures', 
+	IMPACTED_SUBSCRIBERS AS 'Impacted Subscriber',
+	case when (isnull(total_failure,0)+isnull(NO_OF_SUCCESSES,0)) != 0
+		then cast(round((convert(double,isnull(NO_OF_FAILURES,0))/convert(double,(isnull(total_failure,0)+isnull(NO_OF_SUCCESSES,0)))*100),2) as decimal(5,2))
+		else null 	   	
+    	end as 'Failure Ratio',
+	:HIER321_ID AS HIER321_ID,
+	errAggView.CATEGORY_ID,
+	HIERARCHY_1 AS 'Access Area'
+FROM 
+(
+	select 
+		CATEGORY_ID, sum(NO_OF_ERRORS)
+	from 
+		$errAggregationView as tempAgg
+	where	
+		tempAgg.HIER321_ID = :HIER321_ID
+		and
+		#GET_DATETIME_RANGE()
+	group by
+		CATEGORY_ID
+) 
+as errAggView(CATEGORY_ID, NO_OF_FAILURES)	
+left outer join
+(
+	select count(distinct rawview.IMSI), CATEGORY_ID from
+	(
+		#foreach ($rawtable in $rawtables)
+			select			
+				IMSI, CATEGORY_ID		
+			from dc.$rawtable 
+			where
+			HIER321_ID = :HIER321_ID
+			and #GET_DATETIME_RANGE()
+			and #GET_TAC_EXCLUSION()
+			#if($velocityCount < $rawtables.size())
+					union all
+			#end
+		#end
+	) as rawview
+	group by
+		CATEGORY_ID
+) 
+as subscribers(IMPACTED_SUBSCRIBERS, CATEGORY_ID)
+on 
+(		
+	errAggView.CATEGORY_ID = subscribers.CATEGORY_ID
+)
+inner join dc.DIM_E_GSM_CFA_EVENTTYPE eventDesc
+on
+(
+	eventDesc.CATEGORY_ID = errAggView.CATEGORY_ID
+),
+(
+	select
+		sum(NO_OF_SUCCESSES)
+	from 
+		$sucAggregationView as sucTempAgg
+	where	
+		sucTempAgg.HIER321_ID = :HIER321_ID
+	and
+		#GET_DATETIME_RANGE()
+)
+AS sucAggView(NO_OF_SUCCESSES),
+(
+	select
+		sum(NO_OF_ERRORS) as total_failure
+	from 
+		$errAggregationView as errTempAgg
+	where	
+		errTempAgg.HIER321_ID = :HIER321_ID
+	and
+		#GET_DATETIME_RANGE()
+)
+AS totalErrAggView,
+(
+	select distinct VENDOR, HIERARCHY_3, HIERARCHY_1 from dc.DIM_E_SGEH_HIER321 where RAT=0 and HIER321_ID = :HIER321_ID
+) 
+as topology(VENDOR, HIERARCHY_3, HIERARCHY_1)
+order by errAggView.CATEGORY_ID Desc

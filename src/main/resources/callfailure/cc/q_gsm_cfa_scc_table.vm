@@ -1,0 +1,12 @@
+##=============================================================================
+##
+## Cause code query returning all sub cause codes for the wcdma cfa sub cause code table
+##
+##=============================================================================
+select
+    EXTENDED_CAUSE,
+    EXTENDED_CAUSE_DESC
+from
+    dc.DIM_E_GSM_CFA_EXTENDED_CAUSE
+order by
+    EXTENDED_CAUSE

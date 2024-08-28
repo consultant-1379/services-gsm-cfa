@@ -1,0 +1,50 @@
+##
+## GSM Call Failure Detailed Event Analysis for BSC (using raw tables)
+##
+## Velocity Parameter: 
+##
+## Named PreparedStatement Parameter:
+##
+##	   :CATEGORY_ID:   Corresponding event id for access area
+##	   :HIER3_ID:   The bsc hash id
+##
+#set($columnsToSelect=["HIER321_ID, EVENT_TIME, IMSI, RELEASE_TYPE, TAC, URGENCY_CONDITION, EXTENDED_CAUSE"])
+#set($columnsToFilter=["HIER3_ID", "CATEGORY_ID"])
+
+SELECT 
+    #if($count > 0)
+			top $count
+	#end
+	#if($csv == true)
+   	      DATEADD(minute,$tzOffset,rawview.EVENT_TIME)AS 'Event Time',
+   	    #else
+   	      rawview.EVENT_TIME AS 'Event Time',
+   	    #end 
+
+	rawview.IMSI AS IMSI,
+	rawview.TAC AS TAC, 
+	DIM_E_SGEH_TAC.MANUFACTURER AS 'Terminal Make', 
+	DIM_E_SGEH_TAC.MARKETING_NAME AS 'Terminal Model', 
+	DIM_E_GSM_CFA_EVENTTYPE.CATEGORY_ID_DESC AS 'Event Type',
+	DIM_E_GSM_CFA_RELEASE_TYPE.RELEASE_TYPE_DESC AS 'Release Type',
+	DIM_E_GSM_CFA_URGENCY_CONDITION.URGENCY_CONDITION_DESC AS 'Cause Value',    
+	DIM_E_GSM_CFA_EXTENDED_CAUSE.EXTENDED_CAUSE_DESC AS 'Extended Cause Value',
+	topology.HIERARCHY_1 AS 'Access Area'
+FROM 
+	#REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_WITH_TAC_EXCLUSION_SPECIFY_COLUMNS($TECH_PACK_LIST.getAllRawTables() "rawview" $columnsToFilter $columnsToSelect) 
+	,DIM_E_SGEH_TAC,
+	DIM_E_GSM_CFA_EVENTTYPE,
+	DIM_E_GSM_CFA_URGENCY_CONDITION, 
+	DIM_E_GSM_CFA_EXTENDED_CAUSE,
+	DIM_E_GSM_CFA_RELEASE_TYPE,
+	((select distinct HIER321_ID,HIERARCHY_1 from DIM_E_SGEH_HIER321 where RAT = 0) 
+	as topology(HIER321_ID,HIERARCHY_1))
+WHERE 
+	rawview.HIER321_ID *= topology.HIER321_ID AND 
+	rawview.TAC *= DIM_E_SGEH_TAC.TAC AND
+	DIM_E_GSM_CFA_EVENTTYPE.CATEGORY_ID = :CATEGORY_ID AND
+	rawview.URGENCY_CONDITION = DIM_E_GSM_CFA_URGENCY_CONDITION.URGENCY_CONDITION AND
+	rawview.EXTENDED_CAUSE = DIM_E_GSM_CFA_EXTENDED_CAUSE.EXTENDED_CAUSE AND
+	rawview.RELEASE_TYPE = DIM_E_GSM_CFA_RELEASE_TYPE.RELEASE_TYPE
+ORDER BY
+    rawview.EVENT_TIME desc

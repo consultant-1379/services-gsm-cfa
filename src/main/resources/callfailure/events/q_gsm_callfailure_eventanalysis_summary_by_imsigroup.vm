@@ -1,0 +1,110 @@
+##
+## GSM Call Failure Analysis IMSI event summary (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :groupname 
+##
+#set($columnsToSelect="HIER3_ID, CATEGORY_ID, IMSI")
+#set($errrawtables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($sucrawtables=$TECH_PACK_LIST.getAllRawSucTables())
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	CATEGORY_ID_DESC AS 'Event Type',
+	failures AS 'Failures',
+	errresult_data.CATEGORY_ID as 'CATEGORY_ID',
+	Subscribers AS 'Impacted Subscribers',
+	case when (isnull(total_failure,0)+isnull(sucresult_data.success,0)) != 0
+		 then cast(round((convert(double,failures)/convert(double,(isnull(total_failure,0)+isnull(sucresult_data.success,0)))*100),2) as decimal(5,2))
+		 else null  
+	end as 'Failure Ratio',
+	GROUP_NAME AS 'Group Name'
+from
+	(
+		select 
+			CATEGORY_ID,
+			count (*) as failures,
+			COUNT (DISTINCT errrawview.IMSI) AS 'Subscribers',
+			:groupname AS 'GROUP_NAME'
+		from 
+		(
+		#foreach ($rawtable in $errrawtables)
+			select			
+				$columnsToSelect	
+			from dc.$rawtable
+			where	
+    			#GET_DATETIME_RANGE() AND
+    			#GET_TAC_EXCLUSION() AND
+    			CATEGORY_ID is not null
+    			#if($velocityCount < $errrawtables.size())
+    					union all
+    			#end
+		#end
+	) as errrawview
+	,GROUP_TYPE_E_IMSI		
+		WHERE
+			GROUP_TYPE_E_IMSI.GROUP_NAME = :groupname AND
+			GROUP_TYPE_E_IMSI.IMSI = errrawview.IMSI
+		group by CATEGORY_ID
+	) 
+	as errresult_data
+	inner join
+	(
+		select 
+			CATEGORY_ID, 
+			CATEGORY_ID_DESC
+		from 
+			DIM_E_GSM_CFA_EVENTTYPE
+	)
+	as category on errresult_data.CATEGORY_ID=category.CATEGORY_ID,
+	(
+		select 
+			count (*) as success
+		from 
+		(
+		#foreach ($rawtable in $sucrawtables)
+			select			
+				$columnsToSelect	
+			from dc.$rawtable
+			where	
+			    #GET_DATETIME_RANGE() AND
+				#GET_TAC_EXCLUSION() 
+    			#if($velocityCount < $sucrawtables.size())
+    					union all
+    			#end
+		#end
+		) as sucrawview
+		,GROUP_TYPE_E_IMSI		
+		WHERE
+			GROUP_TYPE_E_IMSI.GROUP_NAME = :groupname AND
+			GROUP_TYPE_E_IMSI.IMSI = sucrawview.IMSI
+	)  
+	as sucresult_data,
+	(
+		select 
+			count (*) as total_failure
+		from 
+		(
+		#foreach ($rawtable in $errrawtables)
+			select			
+				$columnsToSelect	
+			from dc.$rawtable
+			where	
+			    #GET_DATETIME_RANGE() AND
+				#GET_TAC_EXCLUSION() 
+    			#if($velocityCount < $errrawtables.size())
+    					union all
+    			#end
+		#end
+		) as errrawview
+		,GROUP_TYPE_E_IMSI		
+		WHERE
+			GROUP_TYPE_E_IMSI.GROUP_NAME = :groupname AND
+			GROUP_TYPE_E_IMSI.IMSI = errrawview.IMSI
+	)  
+	as errtotalresult_data 
+order by CATEGORY_ID Desc

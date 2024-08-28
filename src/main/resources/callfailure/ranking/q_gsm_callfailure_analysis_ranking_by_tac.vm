@@ -1,0 +1,30 @@
+##
+## GSM Call Failure Analysis Terminal Type Ranking (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :dateFrom   starting time
+##     :dateTo     ending time
+##
+select
+	#if($count > 0)
+	  top $count
+	#end
+	rank() over (order by failures desc) as Rank,
+	dim.VENDOR_NAME AS 'Terminal Make',
+	dim.MARKETING_NAME AS Model,
+	rawview.TAC,
+	Count (*) AS Failures	
+
+from 	
+	#REPLACE_RAW_VIEW_WITH_RAW_TABLES_FILTER_ON_TIME_AND_SPECIFY_COLUMNS_WITH_TAC_EXCLUSION($TECH_PACK_LIST.getAllRawTables() "rawview" ["TAC"])
+	,
+	DIM_E_SGEH_TAC dim
+where 
+	rawview.TAC *= dim.TAC
+GROUP BY
+	dim.VENDOR_NAME,
+	dim.MARKETING_NAME,
+	rawview.TAC
+	

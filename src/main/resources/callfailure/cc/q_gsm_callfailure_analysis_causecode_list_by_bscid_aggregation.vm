@@ -1,0 +1,27 @@
+##
+## GSM Call Failure Cause Code Analysis by Access Area Hash ID (using raw tables)
+##
+## Velocity Parameter: 
+##
+## Named PreparedStatement Parameter:
+##
+##	   :HIER3_ID:   The controller hash id
+##     $errAggregationView: Error aggregation view
+##
+#set($columnsToSelect=["HIER3_ID, CAUSE_GROUP"])
+
+SELECT 
+	distinct 
+	aggView.CAUSE_GROUP as 'Cause Group ID',
+    DIM_E_GSM_CFA_CAUSE_GROUP.CAUSE_GROUP_DESC as 'Cause Group'
+FROM 
+	$errAggregationView as aggView, 
+	DIM_E_GSM_CFA_CAUSE_GROUP
+	
+WHERE 
+	aggView.HIER3_ID = :HIER3_ID AND 
+	#GET_DATETIME_RANGE() AND
+	aggView.CAUSE_GROUP = DIM_E_GSM_CFA_CAUSE_GROUP.CAUSE_GROUP
+
+ORDER BY
+	aggView.CAUSE_GROUP

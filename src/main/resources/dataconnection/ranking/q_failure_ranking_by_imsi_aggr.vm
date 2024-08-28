@@ -1,0 +1,26 @@
+##
+## GSM Connection Failure Ranking by IMSI (using raw tables)
+##
+##
+######################## Set template variables #######################
+#set($columnsToSelect=["IMSI, NO_OF_ERRORS"])
+#set($columnToGroupBy="IMSI")
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	rank() over (order by failures desc) as 'Rank',
+	IMSI,
+	failures
+from
+	(
+		select 
+			IMSI as 'IMSI',
+			SUM(NO_OF_ERRORS) AS 'failures'
+		from 
+			$aggregationView WHERE $columnToGroupBy IS NOT NULL AND #GET_DATETIME_RANGE() AND IMSI <> 0
+		group by 
+			$columnToGroupBy
+	) 
+	as result_data

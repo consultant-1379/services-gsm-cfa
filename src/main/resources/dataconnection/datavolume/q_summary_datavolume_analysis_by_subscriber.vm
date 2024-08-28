@@ -1,0 +1,71 @@
+##
+## GSM data connection data volume analysis for IMSI (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :IMSI
+##     :dateFrom   starting time
+##     :dateTo     ending time
+
+######################## Set template variables #######################
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawTablesWithMeasurementType())
+
+######################## SQL #######################
+SELECT
+	:IMSI AS IMSI,
+	convert(numeric(16,0), convert(numeric(16,2), SUM_DOWNLOAD_DATA_VOLUME)) AS 'Download Data Volume (KB)',
+	convert(numeric(16,0), convert(numeric(16,2), SUM_DOWNLOAD_DURATION)) AS 'Download Duration (s)',
+	convert(numeric(16,0), convert(numeric(16,2), SUM_DOWNLOAD_THROUGHPUT)) AS 'Download Throughput (Kb/s)',
+	convert(numeric(16,0), convert(numeric(16,2), SUM_UPLOAD_DATA_VOLUME)) AS 'Upload Data Volume (KB)',
+	convert(numeric(16,0), convert(numeric(16,2), SUM_UPLOAD_DURATION)) AS 'Upload Duration (s)',
+	convert(numeric(16,0), convert(numeric(16,2), SUM_UPLOAD_THROUGHPUT)) AS 'Upload Throughput (Kb/s)',
+	convert(numeric(16,0), convert(numeric(16,2), SUM_TOTAL_DATA_VOLUME)) AS 'Total Data Volume (KB)',
+	convert(numeric(16,0), convert(numeric(16,2), SUM_TOTAL_DURATION)) AS 'Total Duration (s)',
+	convert(numeric(16,0), convert(numeric(16,2), SUM_TOTAL_THROUGHPUT)) AS 'Total Throughput (Kb/s)'
+	FROM
+	(
+	SELECT
+		SUM_DOWNLOAD_DATA_VOLUME,
+	   	SUM_DOWNLOAD_DURATION,
+	   	(ISNULL(SUM_DOWNLOAD_DATA_VOLUME/SUM_DOWNLOAD_DURATION, 0)) AS SUM_DOWNLOAD_THROUGHPUT,
+	    SUM_UPLOAD_DATA_VOLUME,
+	    SUM_UPLOAD_DURATION,
+	    (ISNULL(SUM_UPLOAD_DATA_VOLUME/SUM_UPLOAD_DURATION, 0)) AS SUM_UPLOAD_THROUGHPUT,
+	    SUM_TOTAL_DATA_VOLUME,
+	    SUM_TOTAL_DURATION,
+	    (ISNULL(SUM_TOTAL_DATA_VOLUME/SUM_TOTAL_DURATION, 0)) AS SUM_TOTAL_THROUGHPUT
+		FROM
+		(
+			SELECT 
+			  	:IMSI AS IMSI, 
+			  	SUM (ISNULL(DOWNLOAD_DATA_VOLUME, 0)) AS SUM_DOWNLOAD_DATA_VOLUME, 
+			  	(SUM (ISNULL(DOWNLOAD_DURATION, 0)))/10 AS SUM_DOWNLOAD_DURATION,
+				SUM (ISNULL(UPLOAD_DATA_VOLUME, 0)) AS SUM_UPLOAD_DATA_VOLUME, 
+				(SUM (ISNULL(UPLOAD_DURATION, 0)))/10 AS SUM_UPLOAD_DURATION,
+				SUM (ISNULL(TOTAL_DATA_VOLUME, 0)) AS SUM_TOTAL_DATA_VOLUME,
+				(SUM (ISNULL(TOTAL_DURATION, 0)))/10 AS SUM_TOTAL_DURATION 
+			FROM
+				(
+            		#foreach ($rawtable in $rawtables)
+            			select			
+                            DOWNLOAD_DATA_VOLUME,
+                            DOWNLOAD_DURATION,
+                            UPLOAD_DATA_VOLUME,
+                            UPLOAD_DURATION,
+                            TOTAL_DATA_VOLUME,
+                            TOTAL_DURATION		
+            			from dc.$rawtable 
+            			where
+            			#GET_DATETIME_RANGE()
+            			and IMSI = :IMSI
+            			#if($velocityCount < $rawtables.size())
+            					union all
+            			#end
+            		#end
+            	) as rawview
+		) AS result
+	) AS data
+	
+	

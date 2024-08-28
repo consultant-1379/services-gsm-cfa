@@ -1,0 +1,112 @@
+##
+## GSM Call Failure Analysis BSC event summary (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :groupname  The name of the BSC group
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($sucrawtables=$TECH_PACK_LIST.getAllRawSucTables())
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	CATEGORY_ID_DESC AS 'Event Type',
+	failures,
+	impacted_subscribers,
+	case when (isnull(NO_OF_TOTAL_FAILURES,0)+isnull(successfulCalls,0)) != 0
+		 then cast(round((convert(double,failures)/convert(double,(isnull(NO_OF_TOTAL_FAILURES,0)+isnull(successfulCalls,0)))*100),2) as decimal(5,2))
+		 else null  
+	end as 'Failure Ratio',
+	result_data.CATEGORY_ID as 'CATEGORY_ID',
+	:groupname as 'Group Name'	
+from
+	(
+		select 
+			CATEGORY_ID,
+			count (*) as failures,
+			count (distinct IMSI) as impacted_subscribers
+		from 
+			(
+        		#foreach ($rawtable in $rawtables)
+        			select			
+        				CATEGORY_ID, IMSI		
+        			from 
+						dc.$rawtable raw
+						,GROUP_TYPE_E_RAT_VEND_HIER3
+        			where
+						raw.HIER3_ID is not null AND 
+						GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname AND
+						GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID = raw.HIER3_ID
+						and #GET_DATETIME_RANGE()
+						and #GET_TAC_EXCLUSION()
+        			#if($velocityCount < $rawtables.size())
+        					union all
+        			#end
+        		#end
+        	) as rawview			
+		group by rawview.CATEGORY_ID
+	) 
+	as result_data
+	inner join
+	(
+		select 
+			CATEGORY_ID, 
+			CATEGORY_ID_DESC
+		from 
+			DIM_E_GSM_CFA_EVENTTYPE
+	)
+	as category on result_data.CATEGORY_ID=category.CATEGORY_ID,
+	(
+		select
+			count (*) as NO_OF_TOTAL_FAILURES
+		from 
+			(
+        		#foreach ($rawtable in $rawtables)
+        			select			
+        				CATEGORY_ID 
+        			from 
+						dc.$rawtable raw
+						,GROUP_TYPE_E_RAT_VEND_HIER3
+        			where
+						raw.HIER3_ID is not null AND 
+						GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname AND
+						GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID = raw.HIER3_ID
+						and #GET_DATETIME_RANGE()
+						and #GET_TAC_EXCLUSION()
+        			#if($velocityCount < $rawtables.size())
+        					union all
+        			#end
+        		#end
+        	) 
+        	as rawtotalerrors
+	)
+	as total_failures_results,
+	(
+	select
+			count (*) as successfulCalls
+		from 
+			(
+        		#foreach ($rawtable in $sucrawtables)
+        			select			
+        				raw.HIER3_ID 		
+        			from 
+						dc.$rawtable raw,GROUP_TYPE_E_RAT_VEND_HIER3
+        			where
+						raw.HIER3_ID is not null AND 
+						GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname AND
+						GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID = raw.HIER3_ID
+						and #GET_DATETIME_RANGE()
+						and #GET_TAC_EXCLUSION()
+        			#if($velocityCount < $rawtables.size())
+        					union all
+        			#end
+        		#end
+        	)
+        	as rawsuccessview
+	)
+	as total_success_result
+order by result_data.CATEGORY_ID desc

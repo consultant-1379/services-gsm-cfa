@@ -1,0 +1,132 @@
+##
+## GSM Call Failure Analysis BSC group event summary (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :groupname  The name of the BSC group
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($errrawtables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($sucrawtables=$TECH_PACK_LIST.getAllRawSucTables())
+#set($columnsToSelect=["HIER3_ID", "HIER321_ID", "IMSI"])
+#set($columnsToSelect1=["HIER321_ID"])
+#set($groupTable="GROUP_TYPE_E_RAT_VEND_HIER321")
+#set($groupnameColumn="group_name")
+#set($joinKeys=["HIER321_ID"])
+
+SELECT 
+	#if($count > 0)
+	  top $count
+	#end
+	:SUBCAUSE_CODE AS 'Extended Cause ID',
+	'$subCauseCodeDescription' AS 'Extended Cause Value',
+	HIERARCHY_1 AS 'Access Area',
+	failures AS 'Failures',
+	IMPACTED_SUBSCRIBERS AS 'Impacted Subscriber',
+	'$causeCodeDescription' AS 'Cause Group',
+	:CAUSE_CODE AS 'Cause Group ID',
+	result_data.HIER321_ID AS 'HIER321_ID',
+	
+	case when ((total_failure + successes) != 0)
+			then cast(round((convert(double,failures)/convert(double,(total_failure + successes))*100),2) as decimal(5,2))
+		else null 	   	
+			end as 'Failure Ratio',
+	:groupname AS 'Group Name'
+FROM
+(
+		select            
+			count (*) as failures,			
+			HIER321_ID                                        
+		from 
+			
+				(	#foreach ($rawtable in $rawtables)
+        		    select			
+        				raw.HIER321_ID 
+        			from 
+						$rawtable raw,
+						GROUP_TYPE_E_RAT_VEND_HIER321
+        			where
+						raw.HIER321_ID is not null AND 
+						CAUSE_GROUP = :CAUSE_CODE AND
+						EXTENDED_CAUSE = :SUBCAUSE_CODE AND
+                        GROUP_TYPE_E_RAT_VEND_HIER321.HIER321_ID = raw.HIER321_ID AND						
+                        GROUP_TYPE_E_RAT_VEND_HIER321.GROUP_NAME = :groupname AND		
+						#GET_DATETIME_RANGE() AND
+						#GET_TAC_EXCLUSION()
+						#if($velocityCount < $rawtables.size())
+        					union all
+        				#end
+        			#end			
+                 ) as rawview			
+				   
+	  group by  rawview.HIER321_ID
+) AS result_data (failures, HIER321_ID)
+left outer join
+(
+	select 
+		count(distinct rawview.IMSI),
+		count(DISTINCT rawview.HIER3_ID),
+		HIER321_ID
+	from 
+	(	
+		#foreach ($rawtable in $rawtables)
+		    select
+				GROUP_NAME,
+				#foreach ($columnToInclude in $columnsToSelect)
+					raw.$columnToInclude
+					#if($velocityCount < $columnsToSelect.size())
+					,
+					#end
+				#end			
+			from 
+				dc.$rawtable raw,
+				GROUP_TYPE_E_RAT_VEND_HIER321
+			where
+				#GET_DATETIME_RANGE()
+				and #GET_TAC_EXCLUSION()			
+				and GROUP_TYPE_E_RAT_VEND_HIER321.HIER321_ID = raw.HIER321_ID
+				and GROUP_TYPE_E_RAT_VEND_HIER321.GROUP_NAME = :groupname	
+				and CAUSE_GROUP = :CAUSE_CODE
+				and EXTENDED_CAUSE = :SUBCAUSE_CODE
+    			#if($velocityCount < $rawtables.size())
+    					union all
+    			#end
+    		#end
+	) as rawview
+    	
+	group by 
+		rawview.HIER321_ID
+) AS subscribersRaw(IMPACTED_SUBSCRIBERS, HIER3_ID, HIER321_ID)
+on 
+(		
+	 result_data.HIER321_ID = subscribersRaw.HIER321_ID
+)
+inner join 
+( 
+	select 
+		DISTINCT HIER321_ID, HIERARCHY_1,VENDOR 
+	from 
+		DIM_E_SGEH_HIER321 
+) 
+as hier_table on result_data.HIER321_ID= hier_table.HIER321_ID,
+(
+	select 
+			count (*)
+		from 
+	
+	#REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_WITH_TAC_EXCLUSION_SPECIFY_COLUMNS_GROUPS($sucrawtables "sucrawview" $columnsToSelect1)	
+	
+)
+as sucrawview(successes),	
+(
+	select 
+			count (*) 
+		from 
+		
+	#REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_WITH_TAC_EXCLUSION_SPECIFY_COLUMNS_GROUPS($errrawtables "errrawview" $columnsToSelect1)	
+	
+)
+as errrawview(total_failure)
+order by Failures desc

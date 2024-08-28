@@ -1,0 +1,25 @@
+##
+## GSM Call Failure Cause Code Analysis by Access Area Hash ID (using raw tables)
+##
+## Velocity Parameter: 
+##
+## Named PreparedStatement Parameter:
+##
+##	   :HIER321_ID:   The cell hash id
+##
+#set($columnsToSelect=["DISTINCT CAUSE_GROUP"])
+#set($columnsToFilter=["HIER321_ID"])
+
+SELECT 
+	distinct 
+	rawview.CAUSE_GROUP as 'Cause Group ID',
+    DIM_E_GSM_CFA_CAUSE_GROUP.CAUSE_GROUP_DESC as 'Cause Group'
+FROM 
+	#REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_WITH_TAC_EXCLUSION_SPECIFY_COLUMNS($TECH_PACK_LIST.getAllRawTables() "rawview"  $columnsToFilter $columnsToSelect) 
+	,DIM_E_GSM_CFA_CAUSE_GROUP
+	
+WHERE 
+	rawview.CAUSE_GROUP = DIM_E_GSM_CFA_CAUSE_GROUP.CAUSE_GROUP
+
+ORDER BY
+	rawview.CAUSE_GROUP

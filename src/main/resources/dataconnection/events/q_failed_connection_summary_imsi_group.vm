@@ -1,0 +1,52 @@
+##
+## GSM Connection Failure Analysis  event summary by IMSI group
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :groupname   The IMSI group against we are running this query 
+##
+#set($rawtables=$TECH_PACK_LIST.getAllRawTables())
+select
+	#if($count > 0)
+	  top $count
+	#end
+	category_lookup.CATEGORY_ID_DESC as 'EventType',
+	filtered_raw_data.Failures,
+	filtered_raw_data.Impacted_Subscribers,
+	:groupname as searchParam
+from
+	(
+		select 
+			CATEGORY_ID,
+			count (1) as 'Failures',
+			count (distinct rawview.IMSI) as 'Impacted_Subscribers'
+		from
+			(
+        		#foreach ($rawtable in $rawtables)
+        			select			
+        				CATEGORY_ID, 
+						raw.IMSI		
+        			from 
+						dc.$rawtable raw,
+					    GROUP_TYPE_E_IMSI 
+        			where
+			            raw.IMSI = GROUP_TYPE_E_IMSI.IMSI 
+						AND GROUP_TYPE_E_IMSI.GROUP_NAME = :groupname 
+						and #GET_DATETIME_RANGE()
+						and #GET_TAC_EXCLUSION()
+        			#if($velocityCount < $rawtables.size())
+        					union all
+        			#end
+        		#end
+        	) as rawview
+		group by 
+			CATEGORY_ID
+	) as filtered_raw_data
+	left outer join
+	(
+		select
+			CATEGORY_ID, CATEGORY_ID_DESC
+		from 
+			DIM_E_GSM_PS_EVENTTYPE
+	) as category_lookup on filtered_raw_data.CATEGORY_ID = category_lookup.CATEGORY_ID 

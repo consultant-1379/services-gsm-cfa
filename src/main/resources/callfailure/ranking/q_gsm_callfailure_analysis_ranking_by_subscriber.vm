@@ -1,0 +1,46 @@
+##
+## GSM Call Failure Ranking Analysis by Subscriber  (using raw tables)
+##
+## Velocity Parameter: 
+##		
+##		:CATEGORY_ID:   Corresponding event id for Subscriber	
+##
+## Named PreparedStatement Parameter:
+##
+##     :dateFrom   starting time
+##     :dateTo     ending time
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawTables())
+
+SELECT
+	
+	#if($count > 0)
+	  top $count
+	#end
+	RANK()
+	Over (order by failures desc) AS Rank,
+	rawview.IMSI AS 'IMSI',
+	count (*) AS Failures
+
+FROM
+		(
+		#foreach ($rawtable in $rawtables)
+			select			
+				IMSI		
+			from dc.$rawtable
+			where
+				IMSI is not null 
+				and	CATEGORY_ID = :CATEGORY_ID
+				and #GET_DATETIME_RANGE()
+				and #GET_TAC_EXCLUSION()
+                and IMSI <> 0
+			#if($velocityCount < $rawtables.size())
+					union all
+			#end
+		#end
+	) as rawview
+
+GROUP BY
+	
+	rawview.IMSI

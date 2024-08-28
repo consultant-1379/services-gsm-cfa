@@ -1,0 +1,119 @@
+##
+## GSM Call Failure Summary Event Analysis within Access Group (using aggregation and raw tables)
+##
+## Velocity Parameter:
+##
+## Named PreparedStatement Parameter:
+##
+##     :groupname  The name of the Access Area group
+##     :CATEGORY_ID The category id of the event type 	
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($columnsToSelect=["HIER321_ID", "IMSI"])
+#set($conditionColumns=["CATEGORY_ID"])
+#set($groupTable="GROUP_TYPE_E_RAT_VEND_HIER321")
+#set($groupnameColumn="GROUP_NAME")
+#set($joinKeys=["HIER321_ID"])
+
+SELECT
+	
+	#if($count > 0)
+	  top $count
+	#end
+	    VENDOR AS 'RAN Vendor',
+	    HIERARCHY_1 AS 'Access Area',
+		CATEGORY_ID_DESC AS 'Event Type',
+		NO_OF_FAILURES AS 'Failures', 
+		IMPACTED_SUBSCRIBERS AS 'Impacted Subscribers',
+		##subscribersRaw.HIER321_ID AS 'Impacted Cells',
+		case when ((isnull(total_failure,0) + isnull(successes,0)) != 0)
+			then cast(round((convert(double,failures)/convert(double,(isnull(total_failure,0) + isnull(successes,0)))*100),2) as decimal(5,2))
+		else null 	   	
+			end as 'Failure Ratio',    	
+    	:groupname AS 'Group Name',
+		CATEGORY_ID AS 'CATEGORY_ID',
+		aggView.HIER321_ID AS 'HIER321_ID'
+		
+from
+(
+	select 
+        isnull(sum(NO_OF_ERRORS), 0)  as failures,		
+        DIM_E_GSM_CFA_EVENTTYPE.CATEGORY_ID_DESC, 
+        errorAggregationView.HIER321_ID, 
+        DIM_E_GSM_CFA_EVENTTYPE.CATEGORY_ID         
+	from 
+		$errAggregationView as errorAggregationView,
+		GROUP_TYPE_E_RAT_VEND_HIER321, 
+        DIM_E_GSM_CFA_EVENTTYPE 
+	where
+		errorAggregationView.CATEGORY_ID= :CATEGORY_ID AND
+		DIM_E_GSM_CFA_EVENTTYPE.CATEGORY_ID=errorAggregationView.CATEGORY_ID  AND
+		GROUP_TYPE_E_RAT_VEND_HIER321.GROUP_NAME = :groupname AND
+		GROUP_TYPE_E_RAT_VEND_HIER321.HIER321_ID = errorAggregationView.HIER321_ID AND
+		#GET_DATETIME_RANGE()
+	group by
+		errorAggregationView.HIER321_ID,
+		DIM_E_GSM_CFA_EVENTTYPE.CATEGORY_ID,
+		CATEGORY_ID_DESC
+) 
+as aggView(NO_OF_FAILURES, CATEGORY_ID_DESC, HIER321_ID, CATEGORY_ID)
+left outer join
+(
+	select 
+		count(distinct rawview.IMSI),
+		##count(DISTINCT rawview.HIER321_ID),
+		HIER321_ID
+	from
+	
+		#REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_WITH_TAC_EXCLUSION_CONDITION_COLUMNS_GROUPS($rawtables "rawview" $conditionColumns $columnsToSelect)	
+		
+	group by	rawview.HIER321_ID
+) 
+as subscribersRaw(IMPACTED_SUBSCRIBERS, HIER321_ID)
+on 
+(		
+	 aggView.HIER321_ID = subscribersRaw.HIER321_ID
+)
+INNER JOIN 
+( 
+    SELECT 
+			DISTINCT HIER321_ID, 
+			HIERARCHY_1,
+			VENDOR 
+    FROM 
+			DIM_E_SGEH_HIER321 
+) as hier_table 
+on (subscribersRaw.HIER321_ID= hier_table.HIER321_ID)
+left outer join
+(
+		select 
+			isnull(sum(NO_OF_SUCCESSES), 0) as successes,tempSuc.HIER321_ID 
+		from
+			$sucAggregationView as tempSuc,
+			GROUP_TYPE_E_RAT_VEND_HIER321, 
+		where	
+			#GET_DATETIME_RANGE() AND
+			tempSuc.HIER321_ID = GROUP_TYPE_E_RAT_VEND_HIER321.HIER321_ID AND
+			GROUP_TYPE_E_RAT_VEND_HIER321.GROUP_NAME = :groupname 
+			 
+		group by tempSuc.HIER321_ID
+)as succesAggregation(successes,HIER321_ID)
+on (succesAggregation.HIER321_ID = aggView.HIER321_ID)
+left outer join
+(
+		select 
+			isnull(sum(NO_OF_ERRORS), 0) as total_failure, tempErr.HIER321_ID
+		from
+			$errAggregationView as tempErr,
+			GROUP_TYPE_E_RAT_VEND_HIER321,
+		where	
+			#GET_DATETIME_RANGE() AND
+			tempErr.HIER321_ID = GROUP_TYPE_E_RAT_VEND_HIER321.HIER321_ID AND
+			GROUP_TYPE_E_RAT_VEND_HIER321.GROUP_NAME = :groupname 
+			
+		group by tempErr.HIER321_ID
+)as totalErrAggregation(total_failure,HIER321_ID)
+on (totalErrAggregation.HIER321_ID = aggView.HIER321_ID)
+order by Failures desc
+	

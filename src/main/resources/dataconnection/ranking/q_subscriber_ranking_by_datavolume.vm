@@ -1,0 +1,35 @@
+##
+## GSM Data Volume Ranking for IMSI
+##
+## Named PreparedStatement Parameter:
+##
+##     :dateFrom   starting time
+##     :dateTo     ending time
+
+
+#set($columnsToSelect=["IMSI", "DOWNLOAD_DATA_VOLUME", "UPLOAD_DATA_VOLUME", "TOTAL_DATA_VOLUME"])
+#set($columnToGroupBy="IMSI")
+#set($KILOBYTE_TO_BYTE_RATE=1024)
+
+SELECT 
+#if($count > 0)
+  top $count
+#end
+Rank,
+IMSI,
+convert(numeric(16,0), convert(numeric(16,2), DOWNLINK_DATA_VOLUME)/$KILOBYTE_TO_BYTE_RATE) AS 'Downlink Data Volume (KB)',
+convert(numeric(16,0), convert(numeric(16,2), UPLINK_DATA_VOLUME)/$KILOBYTE_TO_BYTE_RATE) AS 'Uplink Data Volume (KB)',
+convert(numeric(16,0), convert(numeric(16,2), TOTAL_DATA_VOLUME)/$KILOBYTE_TO_BYTE_RATE) AS 'Total Data Volume (KB)'
+FROM
+(
+SELECT
+	RANK() Over (order by TOTAL_DATA_VOLUME desc) AS Rank,
+	rawview.IMSI AS IMSI,
+	SUM (ISNULL(rawview.DOWNLOAD_DATA_VOLUME, 0)) AS DOWNLINK_DATA_VOLUME,
+	SUM (ISNULL(rawview.UPLOAD_DATA_VOLUME, 0)) AS UPLINK_DATA_VOLUME,
+	SUM (ISNULL(rawview.TOTAL_DATA_VOLUME, 0)) AS TOTAL_DATA_VOLUME
+FROM
+	#REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_SPECIFY_COLUMNS_AND_NOT_NULL_COLUMNS_AND_IMSI0_EXCLUSION($TECH_PACK_LIST.getAllRawTablesWithMeasurementType() "rawview" $columnsToSelect [$columnToGroupBy])
+GROUP BY
+  $columnToGroupBy
+) AS result_table

@@ -1,0 +1,57 @@
+##=============================================================================
+##
+## Network analysis : Roaming information by country from the agg tables
+##  
+## Description:
+## 
+##     Get the roaming statistics for each roaming country
+##
+## Template Parameters:
+##		TECH_PACK_LIST - see Javadoc for this object
+##	
+## Query Parameters:
+## 		:dateFrom
+##      :dateTo
+##=============================================================================
+select
+	#if($count > 0)
+	  top $count
+	#end  
+	COUNTRY,	
+    isnull(err.NO_OF_ERRORS,0) as NO_OF_ERRORS,
+	isnull(roamers.NO_OF_TOTAL_ROAMERS,0) as NO_OF_TOTAL_ROAMERS,
+	mccmnc.MCC
+from
+    (select
+            IMSI_MCC,
+            sum(NO_OF_ERRORS)
+     from		
+		$aggregationView
+	where
+		#GET_DATETIME_RANGE()
+    group by
+         IMSI_MCC
+     ) as err (IMSI_MCC,NO_OF_ERRORS)
+	 left outer join
+	(select
+            IMSI_MCC,			
+            count(1),
+			count(distinct(IMSI))
+     from		
+		#REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_AND_ROAMING($TECH_PACK_LIST.getAllRawErrTables() "temp_err" ["IMSI_MCC", "IMSI"])	 		
+    group by
+         IMSI_MCC
+     ) as roamers (IMSI_MCC, NO_OF_ERRORS, NO_OF_TOTAL_ROAMERS)
+	 on (
+		err.IMSI_MCC = roamers.IMSI_MCC 
+	 )	
+	inner join
+		(select distinct MCC, COUNTRY from dc.DIM_E_SGEH_MCCMNC) as mccmnc
+	 on
+    (
+        err.IMSI_MCC = mccmnc.MCC
+    )
+order by 
+	NO_OF_ERRORS DESC
+   
+    	

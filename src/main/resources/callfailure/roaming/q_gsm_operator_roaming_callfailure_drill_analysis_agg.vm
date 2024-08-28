@@ -1,0 +1,96 @@
+##
+## GSM Call Failure Analysis BSC event summary (using aggregation tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :HIER3_ID   The hash id of the controller(BSC)
+##
+
+#set($columnsToIncludeInRawView=["IMSI","CATEGORY_ID"])
+
+select
+	#if($count > 0)
+	  top $count
+	#end	
+	OPERATOR as 'Operator',
+	CATEGORY_ID_DESC AS 'Event Type',
+	failures AS 'Failures',
+	impacted_subscribers AS 'Impacted Subscribers',	
+	case when (isnull(total_failure,0)+isnull(successfulCalls,0)) != 0   
+	    then cast(round((convert(double,failures)/convert(double,(isnull(total_failure,0)+isnull(successfulCalls,0)))*100),2) as decimal(5,2))
+	else
+		null
+	end as 'Failure Ratio',
+	aggView.CATEGORY_ID as 'CATEGORY_ID',	
+	'$MCC' as 'MCC',
+	'$MNC' as 'MNC'
+from
+(
+	select 
+		sum(NO_OF_SUCCESSES)
+	from
+		$sucAggregationView as tempSuc
+	where	
+		IMSI_MCC = '${MCC}'
+		and
+		IMSI_MNC = '${MNC}'
+		and
+		#GET_DATETIME_RANGE()
+)as succesAggregation(successfulCalls),
+(
+	select 
+		CATEGORY_ID, sum(NO_OF_ERRORS)
+	from 
+		$errAggregationView as tempAgg
+	where	
+		IMSI_MCC = '${MCC}'
+		and
+		IMSI_MNC = '${MNC}'
+		and
+		#GET_DATETIME_RANGE()
+	group by
+		CATEGORY_ID
+) 
+as aggView(CATEGORY_ID, failures)	
+left outer join
+(
+	select count(distinct rawview.IMSI), CATEGORY_ID 
+	from
+		#REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_AND_ROAMING_MCC_MNC($TECH_PACK_LIST.getAllRawErrTables() "rawview" $columnsToIncludeInRawView)
+
+	group by
+		CATEGORY_ID
+) 
+as subscribers(impacted_subscribers, CATEGORY_ID)
+on 
+(		
+	aggView.CATEGORY_ID = subscribers.CATEGORY_ID
+)
+	inner join
+	(
+		select 
+			CATEGORY_ID, 
+			CATEGORY_ID_DESC
+		from 
+			DIM_E_GSM_CFA_EVENTTYPE
+	)
+	as category on aggView.CATEGORY_ID=category.CATEGORY_ID,
+	(select distinct OPERATOR from DIM_E_SGEH_MCCMNC
+		where MCC = '${MCC}'
+		and MNC='${MNC}'
+	) as mccmnc,
+	(
+		select 
+			sum(NO_OF_ERRORS) as total_failure
+		from
+		        $errAggregationView
+	        where	
+			IMSI_MCC = '${MCC}'
+			and
+			IMSI_MCC = '${MNC}'
+			and
+			#GET_DATETIME_RANGE()
+       ) 
+     as errtotalresult_data order by aggView.CATEGORY_ID Desc
+	

@@ -1,0 +1,48 @@
+##
+## GSM Data Connection Cause Code Analysis by Subscriber (using raw tables)
+##
+## Velocity Parameter: 
+##		
+## Named PreparedStatement Parameter:
+##
+##	   :IMSI:   
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawTablesWithMeasurementType())
+
+    select 
+        scc_id,
+        dimCC.CHANNEL_RELATED_RELEASE_CAUSE_GROUP_DESC as scc_desc,
+        NO_OF_OCCURRENCES,
+        1 as NO_OF_IMPACTED_SUBSCRIBERS
+    from
+    (
+        select 
+            error_events.CHANNEL_RELATED_RELEASE_CAUSE_GROUP as scc_id, 
+            isnull(sum(NO_OF_ERRORS),0) as NO_OF_OCCURRENCES
+        from 
+            (
+        		#foreach ($rawtable in $rawtables)
+        			select
+						TBF_RELEASE_CAUSE, 
+						CHANNEL_RELATED_RELEASE_CAUSE_GROUP, 
+						NO_OF_ERRORS
+        			from 
+						dc.$rawtable 
+        			where
+						IMSI=:IMSI 
+						and NO_OF_ERRORS<>0
+						and TBF_RELEASE_CAUSE=2
+						and #GET_DATETIME_RANGE()
+        			#if($velocityCount < $rawtables.size())
+        					union all
+        			#end
+        		#end
+        	) as error_events
+     group by error_events.CHANNEL_RELATED_RELEASE_CAUSE_GROUP	
+    ) errors, dc.DIM_E_GSM_PS_CHANNEL_RELATED_RELEASE_CAUSE_GROUP dimCC
+	where 
+		dimCC.CHANNEL_RELATED_RELEASE_CAUSE_GROUP = errors.scc_id
+		
+
+

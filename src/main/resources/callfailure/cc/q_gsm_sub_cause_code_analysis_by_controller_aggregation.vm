@@ -1,0 +1,92 @@
+#DEFINE_CONSTANTS()
+
+select
+	events.SUB_CAUSE_CODE as "Extended Cause ID",
+	events.SUB_CAUSE_CODE_DESC as "Extended Cause Value",
+	events.NO_OF_ERRORS as "Failures",
+	isnull(subscribers.NO_OF_SUBSCRIBERS,0) as "Impacted Subscribers"
+	,'$node' as "Node"
+	,'$CAUSE_VALUE' as "Cause Group"
+	,:CAUSE_GROUP as "Cause Group ID"
+	,:HIER3_ID as "HIER3_ID"
+	#if($CATEGORY_ID != "")	
+		,'$CATEGORY_ID' as "CATEGORY_ID"
+	#else
+		,'Not Applicable' as "CATEGORY_ID"
+	#end
+	#if($failure_type != "")	
+		,'$failure_type' as 'Event Type'
+	#else
+		,'Not Applicable' as "Event Type"
+	#end
+from
+	(
+	select
+    	err.SUB_CAUSE_CODE as SUB_CAUSE_CODE,
+    	err.SUB_CAUSE_CODE_DESC as SUB_CAUSE_CODE_DESC,
+    	sum(isnull(err.NO_OF_ERRORS, 0)) as NO_OF_ERRORS
+    from 
+    	(
+    		select	
+            	sccref.EXTENDED_CAUSE, 
+            	EXTENDED_CAUSE_DESC, 
+            	sum(NO_OF_ERRORS)
+            from
+            	dc.${errAggregationView} errRef,
+            	dc.DIM_E_GSM_CFA_EXTENDED_CAUSE sccref
+            where
+            	#GET_DATETIME_RANGE()
+            	and HIER3_ID = :HIER3_ID
+            	and errRef.CAUSE_GROUP = :CAUSE_GROUP 
+            	and sccref.EXTENDED_CAUSE = errRef.EXTENDED_CAUSE
+				#if($CATEGORY_ID != "")	
+					and
+					errRef.CATEGORY_ID = :CATEGORY_ID
+				#end
+            group by
+            	sccref.EXTENDED_CAUSE,
+            	EXTENDED_CAUSE_DESC		
+    	) as err (SUB_CAUSE_CODE, SUB_CAUSE_CODE_DESC, NO_OF_ERRORS)
+    group by
+    	err.SUB_CAUSE_CODE,
+    	err.SUB_CAUSE_CODE_DESC
+	) events,
+	(
+	select
+    	sub.SUB_CAUSE_CODE  as SUB_CAUSE_CODE,
+    	isnull(count(distinct(IMSI)),0) as NO_OF_SUBSCRIBERS
+    from 
+    	(
+    	#foreach ($errtable in $TECH_PACK_LIST.getAllRawTables())
+    		(
+                select	
+                	EXTENDED_CAUSE,
+                	IMSI
+                from
+                	dc.${errtable} 
+                where
+                	#GET_DATETIME_RANGE()
+                	and #GET_TAC_EXCLUSION()
+					and HIER3_ID = :HIER3_ID
+					and CAUSE_GROUP = :CAUSE_GROUP 
+				#if($CATEGORY_ID != "")	
+					and
+					CATEGORY_ID = :CATEGORY_ID
+				#end
+                group by
+                	EXTENDED_CAUSE,
+                	IMSI
+            )	
+    		#if($velocityCount < $TECH_PACK_LIST.getAllRawTables().size())
+    			union all
+    		#end
+    	#end
+    	) as sub (SUB_CAUSE_CODE, IMSI)
+    	group by
+    	sub.SUB_CAUSE_CODE
+    ) subscribers
+where
+	events.SUB_CAUSE_CODE *= subscribers.SUB_CAUSE_CODE
+order by
+	Failures DESC
+	

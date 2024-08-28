@@ -1,0 +1,55 @@
+#DEFINE_CONSTANTS()
+
+select
+	err.CAUSE_GROUP as 'Cause Group ID',
+	err.CAUSE_GROUP_DESC as 'Cause Group',
+	count(*) as 'Failures',
+	isnull(count(distinct(err.IMSI)),0) as 'Impacted Subscribers'
+	,'$node' as "Node"
+	,:HIER3_ID as "HIER3_ID"
+	#if($CATEGORY_ID != "")	
+		,'$CATEGORY_ID' as "CATEGORY_ID"
+	#else
+		,'Not Applicable' as "CATEGORY_ID"
+	#end
+	#if($failure_type != "")	
+		,'$failure_type' as 'Event Type'
+	#else
+		,'Not Applicable' as "Event Type"
+	#end
+from 
+(
+	#foreach ($errtable in $TECH_PACK_LIST.getAllRawTables())
+		(
+        select	
+        	ccref.CAUSE_GROUP, 
+        	CAUSE_GROUP_DESC, 
+        	IMSI
+        from
+        	dc.${errtable} errRef,
+        	dc.DIM_E_GSM_CFA_CAUSE_GROUP ccref
+        where
+        	#GET_DATETIME_RANGE()
+        	and HIER3_ID = :HIER3_ID
+        	and #GET_TAC_EXCLUSION()
+        	and ccref.CAUSE_GROUP = errRef.CAUSE_GROUP
+			#if ($display == "chart")
+				and
+				errRef.CAUSE_GROUP in ($causeCodeIds)
+			#end
+			#if($CATEGORY_ID != "")	
+				and
+				errRef.CATEGORY_ID = :CATEGORY_ID
+			#end
+        )	
+		#if($velocityCount < $TECH_PACK_LIST.getAllRawTables().size())
+			union all
+		#end
+	#end
+) as err (CAUSE_GROUP, CAUSE_GROUP_DESC, IMSI)
+group by
+	err.CAUSE_GROUP,
+	err.CAUSE_GROUP_DESC
+order by
+	Failures  DESC
+	

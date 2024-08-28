@@ -1,0 +1,63 @@
+##=============================================================================
+##
+## Network analysis : Roaming information by operator from the aggregation  tables
+##  
+## Description:
+## 
+##     Get the roaming statistics for each roaming operator
+##
+## Template Parameters:
+##		TECH_PACK_LIST - see Javadoc for this object
+##	
+## Query Parameters:
+## 		:dateFrom
+##      :dateTo
+##=============================================================================
+select
+	#if($count > 0)
+	  top $count
+	#end
+	OPERATOR,	
+    isnull(err.NO_OF_ERRORS,0) as NO_OF_ERRORS,
+	isnull(roamers.NO_OF_TOTAL_ROAMERS,0) as NO_OF_TOTAL_ROAMERS,	  
+	COUNTRY,
+	mccmnc.MCC,
+	mccmnc.MNC
+from
+    (select
+            IMSI_MCC,
+			IMSI_MNC,
+            sum(NO_OF_ERRORS)
+     from		
+		$aggregationView
+	where
+		#GET_DATETIME_RANGE()
+    group by
+         IMSI_MCC,
+		 IMSI_MNC
+     ) as err ( IMSI_MCC,IMSI_MNC, NO_OF_ERRORS)	 
+	left outer join (
+		select
+			IMSI_MCC,
+			IMSI_MNC,
+			count(distinct(IMSI))
+		from
+			#REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_AND_ROAMING($TECH_PACK_LIST.getAllRawErrTables() "temp_err" ["IMSI_MCC", "IMSI_MNC", "IMSI"])		
+		group by
+			IMSI_MCC,
+			IMSI_MNC
+		) as roamers(IMSI_MCC, IMSI_MNC, NO_OF_TOTAL_ROAMERS)
+	on
+	(
+		err.IMSI_MCC = roamers.IMSI_MCC and
+		err.IMSI_MNC = roamers.IMSI_MNC
+	)
+	inner join
+		dc.DIM_E_SGEH_MCCMNC mccmnc
+	 on
+    (
+        err.IMSI_MCC = mccmnc.MCC and
+		err.IMSI_MNC = mccmnc.MNC
+    )
+order by 
+	NO_OF_ERRORS DESC

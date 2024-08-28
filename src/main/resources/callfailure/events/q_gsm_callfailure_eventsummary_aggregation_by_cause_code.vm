@@ -1,0 +1,68 @@
+##
+## GSM Call Failure Analysis Cause Code Summary (using aggregation tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :dateFrom   starting time
+##     :dateTo     ending time
+##     $causeCode
+##     $causeCodeDescription
+##     $CATEGORY_ID 
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawTables())
+
+SELECT 
+	#if($count > 0)
+	  top $count
+	#end
+	dim.EXTENDED_CAUSE_DESC AS 'Extended Cause Value', 
+	aggView.EXTENDED_CAUSE AS 'Extended Cause ID', 
+	aggView.Failures,
+	isnull(subscribers.IMPACTED_SUBSCRIBERS,0) AS 'Impacted Subscribers',
+	'$causeCodeDescription' AS 'Cause Value',
+	 :CAUSE_CODE AS 'Cause Code ID'
+FROM	
+	(
+		SELECT 
+			EXTENDED_CAUSE, sum(isnull(tempAgg.NO_OF_ERRORS, 0)) 
+		FROM
+			$errAggregationView AS tempAgg
+		WHERE
+			tempAgg.URGENCY_CONDITION = :CAUSE_CODE
+		AND 	
+			tempAgg.CATEGORY_ID = :CATEGORY_ID 
+		AND 
+			#GET_DATETIME_RANGE()
+		GROUP BY
+			EXTENDED_CAUSE
+	) AS aggView(EXTENDED_CAUSE, Failures),
+	DIM_E_GSM_CFA_EXTENDED_CAUSE as dim,
+	(
+		SELECT 
+			count(distinct rawview.IMSI), EXTENDED_CAUSE 
+		FROM
+			(
+			#foreach ($rawtable in $rawtables)
+    			select			
+    				IMSI, EXTENDED_CAUSE		
+    			from dc.$rawtable 
+    			where
+    				URGENCY_CONDITION = :CAUSE_CODE
+					and CATEGORY_ID = :CATEGORY_ID
+        			and #GET_DATETIME_RANGE()
+        			and #GET_TAC_EXCLUSION()
+    			#if($velocityCount < $rawtables.size())
+    					union all
+    			#end
+			#end
+			) as rawview
+		GROUP BY
+			EXTENDED_CAUSE
+	) AS subscribers(IMPACTED_SUBSCRIBERS, EXTENDED_CAUSE)
+WHERE
+	aggView.EXTENDED_CAUSE *= subscribers.EXTENDED_CAUSE AND
+	aggView.EXTENDED_CAUSE = dim.EXTENDED_CAUSE
+ORDER BY
+	aggView.Failures DESC

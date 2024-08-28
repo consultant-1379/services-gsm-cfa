@@ -1,0 +1,43 @@
+##
+## GSM Call Failure Analysis Access Area Ranking (using aggregation table)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :dateFrom   starting time
+##     :dateTo     ending time
+##
+select
+	#if($count > 0)
+	  top $count
+	#end
+	rank() over (order by NO_OF_ERRORS desc) as Rank,
+	VENDOR 'RAN Vendor',
+	HIERARCHY_3 AS 'Controller',
+	HIERARCHY_1 AS 'Access Area',	
+	NO_OF_ERRORS,
+	hier_table.HIER321_ID
+from
+	(
+		select 
+			HIER321_ID, 
+			sum(isnull(NO_OF_ERRORS, 0)) as NO_OF_ERRORS
+		from
+			$errAggregationView
+		where 
+			HIER321_ID is not null AND
+			#GET_DATETIME_RANGE()
+		group by 
+			HIER321_ID
+	) 
+	as result_data
+	left outer join
+	( 
+		select 
+			distinct HIERARCHY_3,HIER321_ID,VENDOR,HIERARCHY_1 
+		from 
+			DIM_E_SGEH_HIER321			
+		where 
+			RAT=0
+	) 
+	as hier_table on result_data.HIER321_ID = hier_table.HIER321_ID	

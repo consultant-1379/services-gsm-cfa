@@ -1,0 +1,124 @@
+##
+## GSM Call Failure Analysis BSC group event summary (using aggregation tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :groupname  The name of the BSC group
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($columnsToSelect=["HIER3_ID", "HIER321_ID", "IMSI"])
+#set($groupTable="GROUP_TYPE_E_RAT_VEND_HIER3")
+#set($groupnameColumn="GROUP_NAME")
+#set($joinKeys=["HIER3_ID"])
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	:SUBCAUSE_CODE AS 'Extended Cause ID',
+	'$subCauseCodeDescription' AS 'Extended Cause Value',
+	HIERARCHY_3 AS 'Controller',
+	failures AS 'Failures',
+	IMPACTED_SUBSCRIBERS AS 'Impacted Subscriber',
+	'$causeCodeDescription' AS 'Cause Group',
+	:CAUSE_CODE AS 'Cause Group ID',
+	aggView.HIER3_ID AS 'HIER3_ID',
+	HIER321_ID AS 'Impacted Cells',
+	case when ((total_failure + successes) != 0)
+			then cast(round((convert(double,failures)/convert(double,(total_failure + successes))*100),2) as decimal(5,2))
+		else null 	   	
+			end as 'Failure Ratio',
+	:groupname AS 'Group Name'
+		
+from
+(
+	select 
+        isnull(sum(NO_OF_ERRORS), 0) as failures,		
+        errorAggregationView.HIER3_ID 
+	from 
+		$errAggregationView as errorAggregationView,
+		GROUP_TYPE_E_RAT_VEND_HIER3 
+	where
+		GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname AND
+		GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID = errorAggregationView.HIER3_ID AND
+		#GET_DATETIME_RANGE()
+	group by
+		errorAggregationView.HIER3_ID
+) 
+as aggView(failures, HIER3_ID)
+left outer join
+(
+	select 
+		count(distinct rawview.IMSI),
+		count(DISTINCT rawview.HIER321_ID),
+		HIER3_ID
+	from
+	(	
+		#foreach ($rawtable in $rawtables)
+		    select
+				GROUP_NAME,
+				#foreach ($columnToInclude in $columnsToSelect)
+					raw.$columnToInclude
+					#if($velocityCount < $columnsToSelect.size())
+					,
+					#end
+				#end			
+			from 
+				dc.$rawtable raw,
+				GROUP_TYPE_E_RAT_VEND_HIER3
+			where
+				#GET_DATETIME_RANGE()
+				and #GET_TAC_EXCLUSION()			
+				and GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID = raw.HIER3_ID
+				and GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname	
+				and CAUSE_GROUP = :CAUSE_CODE
+				and EXTENDED_CAUSE = :SUBCAUSE_CODE
+    			#if($velocityCount < $rawtables.size())
+    					union all
+    			#end
+    		#end
+	) as rawview
+		
+	group by	
+		rawview.HIER3_ID
+) 
+as subscribersRaw(IMPACTED_SUBSCRIBERS, HIER321_ID, HIER3_ID)
+on 
+(		
+	 aggView.HIER3_ID = subscribersRaw.HIER3_ID
+)
+inner join 
+( 
+		select 
+			DISTINCT HIER3_ID, 
+			HIERARCHY_3
+		from 
+			DIM_E_SGEH_HIER321 
+	) as hier_table 
+	on subscribersRaw.HIER3_ID= hier_table.HIER3_ID,
+	(
+		select 
+			isnull(sum(NO_OF_SUCCESSES), 0)
+		from
+			$sucAggregationView as tempSuc,
+			GROUP_TYPE_E_RAT_VEND_HIER3, 
+		where	
+			tempSuc.HIER3_ID = GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID AND
+			GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname AND
+			#GET_DATETIME_RANGE() 
+)as succesAggregation(successes),
+(
+		select 
+			isnull(sum(NO_OF_ERRORS), 0)
+		from
+			$errAggregationView as tempErr,
+			GROUP_TYPE_E_RAT_VEND_HIER3,
+		where	
+			tempErr.HIER3_ID = GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID AND
+			GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname AND
+			#GET_DATETIME_RANGE()
+)as totalErrAggregation(total_failure)
+order by Failures desc
+	

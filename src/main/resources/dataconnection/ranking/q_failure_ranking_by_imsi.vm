@@ -1,0 +1,41 @@
+##
+## GSM Connection Failure Ranking by IMSI (using raw tables)
+##
+##
+######################## Set template variables #######################
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawTablesWithMeasurementType())
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	rank() over (order by failures desc) as 'Rank',
+	result_data.IMSI,
+	failures
+from
+	(
+		select 
+			IMSI, 
+			SUM(NO_OF_ERRORS) AS failures
+		from 
+			(
+        		#foreach ($rawtable in $rawtables)
+        			select			
+						IMSI, NO_OF_ERRORS		
+        			from dc.$rawtable 
+        			where
+        			IMSI is not null
+                    and IMSI <> 0
+					and #GET_DATETIME_RANGE()
+        			and #GET_TAC_EXCLUSION()
+        			
+        			#if($velocityCount < $rawtables.size())
+        					union all
+        			#end
+        		#end
+        	) as rawview
+		group by 
+			IMSI
+	) 
+	as result_data

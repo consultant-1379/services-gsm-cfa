@@ -1,0 +1,72 @@
+##=============================================================================
+##
+## Network analysis : Roaming information by country from the raw tables
+##
+##       @author ezhelao
+## Description:
+## 
+##     Get the roaming statistics for each event type by MCC and MNC
+##
+## Template Parameters:
+##		TECH_PACK_LIST - RAN_CFA_ERR_RAW
+##	
+## Query Parameters:
+## 		:dateFrom
+##      :dateTo
+##=============================================================================
+
+
+#DEFINE_CONSTANTS()
+#set($columnsToIncludeInNewView=["CATEGORY_ID","IMSI", "IMSI_MCC","IMSI_MNC"])
+#set($columnsToIncludeInSuccessView=["IMSI_MCC","IMSI_MNC"])
+
+select
+    OPERATOR as 'Operator',
+    CATEGORY_ID_DESC as 'Event Type',
+    Failures as 'Failures',
+    IMPACTED_SUBSCRIBERS as 'Impacted Subscribers',
+	case when (isnull(total_failure,0)+isnull(successfulCalls,0)) != 0   
+	    then cast(round((convert(double,failures)/convert(double,(isnull(total_failure,0)+isnull(successfulCalls,0)))*100),2) as decimal(5,2))
+	else
+		null
+	end as 'Failure Ratio',
+	result_data.CATEGORY_ID,
+    '${MCC}' as 'MCC',
+    '${MNC}' as 'MNC'
+from
+(
+		select 
+			count(1)
+		from
+			#REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_AND_ROAMING_MCC_MNC($TECH_PACK_LIST.getAllRawSucTables() "tmpRawSuceesses" $columnsToIncludeInSuccessView)
+	)as rawsuccesses(successfulCalls),
+(select CATEGORY_ID,
+       count(*) as failures ,
+       count (distinct(IMSI)) as IMPACTED_SUBSCRIBERS
+
+from
+    #REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_AND_ROAMING_MCC_MNC($TECH_PACK_LIST.getAllRawErrTables() "rawview" $columnsToIncludeInNewView)
+group by
+CATEGORY_ID
+) as result_data
+inner join
+	(
+		select 
+			CATEGORY_ID, 
+			CATEGORY_ID_DESC
+		from 
+			DIM_E_GSM_CFA_EVENTTYPE
+	)as category on result_data.CATEGORY_ID=category.CATEGORY_ID,
+	
+(select distinct OPERATOR from DIM_E_SGEH_MCCMNC
+    where MCC = '${MCC}'
+       and MNC='${MNC}'
+) as mccmnc,
+(
+		select 
+			count (*) as total_failure
+		from 
+			#REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_AND_ROAMING_MCC_MNC($TECH_PACK_LIST.getAllRawErrTables() "totalerrrawview" $columnsToIncludeInNewView)
+ )as errtotalresult_data	
+		
+ order by result_data.CATEGORY_ID Desc

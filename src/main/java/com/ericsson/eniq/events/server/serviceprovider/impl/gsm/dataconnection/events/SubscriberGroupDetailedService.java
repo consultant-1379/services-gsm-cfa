@@ -1,0 +1,182 @@
+/**
+ * -----------------------------------------------------------------------
+ *     Copyright (C) 2011 LM Ericsson Limited.  All rights reserved.
+ * -----------------------------------------------------------------------
+ */
+package com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.events;
+
+import static com.ericsson.eniq.events.server.common.ApplicationConfigConstants.*;
+import static com.ericsson.eniq.events.server.common.ApplicationConstants.*;
+import static com.ericsson.eniq.events.server.common.TechPackData.*;
+
+import java.util.*;
+
+import javax.ejb.*;
+import javax.ws.rs.core.*;
+
+import com.ericsson.eniq.events.server.common.*;
+import com.ericsson.eniq.events.server.common.tablesandviews.*;
+import com.ericsson.eniq.events.server.query.*;
+import com.ericsson.eniq.events.server.serviceprovider.*;
+import com.ericsson.eniq.events.server.serviceprovider.impl.*;
+import com.ericsson.eniq.events.server.utils.*;
+import com.sun.jersey.core.util.*;
+
+/**
+ * @author eatiaro
+ */
+@Stateless
+@Local(Service.class)
+public class SubscriberGroupDetailedService extends GenericService {
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#getServiceSpecificTemplateParameters(javax.ws.rs.core.MultivaluedMap, com.ericsson.eniq.events.server.utils.DateTimeRange.FormattedDateTimeRange)
+     */
+    @Override
+    public Map<String, Object> getServiceSpecificTemplateParameters(
+            final MultivaluedMap<String, String> requestParameters, final FormattedDateTimeRange dateTimeRange,
+            final TechPackList techPackList) {
+        return new HashMap<String, Object>();
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#getTemplatePath()
+     */
+    @Override
+    public String getTemplatePath() {
+        return GSM_DATA_CONNECTION_SUBSCRIBER_DETAILED_EVENT_ANALYSIS_GROUP;
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#getServiceSpecificDataServiceParameters(javax.ws.rs.core.MultivaluedMap)
+     */
+    @Override
+    public Map<String, Object> getServiceSpecificDataServiceParameters(
+            final MultivaluedMap<String, String> requestParameters) {
+        final Map<String, Object> dataServiceParameters = new HashMap<String, Object>();
+        dataServiceParameters.put(TZ_OFFSET, requestParameters.getFirst(TZ_OFFSET));
+        return dataServiceParameters;
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#getRequiredParametersForQuery()
+     */
+    @Override
+    public List<String> getRequiredParametersForQuery() {
+        final List<String> requiredParameters = new ArrayList<String>();
+        requiredParameters.add(TZ_OFFSET);
+        return requiredParameters;
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#getValidDisplayParameters()
+     */
+    @Override
+    public MultivaluedMap<String, String> getStaticParameters() {
+        return new MultivaluedMapImpl();
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#getDrillDownTypeForService()
+     */
+    @Override
+    public String getDrillDownTypeForService(final MultivaluedMap<String, String> requestParameters) {
+        return null;
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#getAggregationViews()
+     */
+    @Override
+    public AggregationTableInfo getAggregationView(final String type) {
+        return new AggregationTableInfo(NO_AGGREGATION_AVAILABLE);
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#getApplicableTechPacks(javax.ws.rs.core.MultivaluedMap)
+     */
+    @Override
+    public List<String> getApplicableTechPacks(final MultivaluedMap<String, String> requestParameters) {
+        final List<String> techPacks = new ArrayList<String>();
+        techPacks.add(EVENT_E_GSM_PS);
+        return techPacks;
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#areRawTablesRequiredForQuery()
+     */
+    @Override
+    public boolean areRawTablesRequiredForAggregationQueries() {
+        return false;
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#getMaxAllowableSize()
+     */
+    @Override
+    public int getMaxAllowableSize() {
+        return MAXIMUM_POSSIBLE_CONFIGURABLE_MAX_JSON_RESULT_SIZE;
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#requiredToCheckValidParameterValue(javax.ws.rs.core.MultivaluedMap)
+     */
+    @Override
+    public boolean requiredToCheckValidParameterValue(final MultivaluedMap<String, String> requestParameters) {
+        return false;
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericServiceInterface#getServiceSpecificQueryParameters(javax.ws.rs.core.MultivaluedMap)
+     */
+    @Override
+    public Map<String, QueryParameter> getServiceSpecificQueryParameters(
+            final MultivaluedMap<String, String> requestParameters) {
+        final Map<String, QueryParameter> queryParameters = new HashMap<String, QueryParameter>();
+        if (requestParameters.containsKey(SEARCH_PARAM)) {
+            queryParameters.put(GROUP_NAME_PARAM,
+                    getQueryUtils().createQueryParameter(GROUP_NAME_PARAM, requestParameters.getFirst(SEARCH_PARAM)));
+        }
+        return queryParameters;
+    }
+
+    /**
+     * For EVENT_E_RAN_CFA raw tables we only have ERR tables.
+     *
+     * @return
+     */
+    @Override
+    public List<String> getRawTableKeys() {
+        final List<String> rawTableKeys = new ArrayList<String>();
+        rawTableKeys.add(KEY_TYPE_ERR);
+        return rawTableKeys;
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericServiceInterface#getTableSuffixKey()
+     */
+    @Override
+    public String getTableSuffixKey() {
+        return null;
+    }
+
+    /* (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericServiceInterface#getMeasurementTypes()
+     */
+    @Override
+    public List<String> getMeasurementTypes() {
+        return null;
+    }
+
+    /*
+     * (non-Javadoc)
+     * @see com.ericsson.eniq.events.server.serviceprovider.impl.GenericService#getTimeColumnIndices()
+     */
+    @Override
+    public List<Integer> getTimeColumnIndices() {
+        final List<Integer> columnIndices = new ArrayList<Integer>();
+        columnIndices.add(1);
+        return columnIndices;
+    }
+
+}

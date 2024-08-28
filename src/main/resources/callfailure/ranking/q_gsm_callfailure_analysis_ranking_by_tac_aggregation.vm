@@ -1,0 +1,32 @@
+##
+## GSM Call Failure Analysis Terminal Type Ranking (using aggregation tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :dateFrom   starting time
+##     :dateTo     ending time
+##
+
+
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	rank() over (order by Failures desc) as Rank,
+	dim.VENDOR_NAME AS 'Terminal Make',
+	dim.MARKETING_NAME AS Model,
+	aggview.TAC,
+	sum(NO_OF_ERRORS) AS Failures	
+from
+	$errAggregationView as aggview,
+	DIM_E_SGEH_TAC dim
+where 
+	aggview.TAC *= dim.TAC
+	and
+	#GET_DATETIME_RANGE()
+GROUP BY
+	VENDOR_NAME,
+	Model,
+	aggview.TAC

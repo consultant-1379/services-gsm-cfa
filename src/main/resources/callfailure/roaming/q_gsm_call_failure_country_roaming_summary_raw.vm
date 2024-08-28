@@ -1,0 +1,60 @@
+##
+## GSM Roaming Analysis of Country summary (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+
+
+#set($rawErrTables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($rawSuccesTables=$TECH_PACK_LIST.getAllRawSucTables())
+#set($columnsToIncludeInNewView=["CATEGORY_ID","IMSI", "IMSI_MCC"])
+#set($columnsToIncludeInSuccessView=["IMSI_MCC"])
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	'$COUNTRY' as 'Country',	
+	CATEGORY_ID_DESC AS 'Event Type',
+	failures AS 'Failures',
+	impacted_subscribers AS 'Impacted Subscribers',	
+	case when (isnull(total_failure,0)+isnull(successfulCalls,0)) != 0   
+	    then cast(round((convert(double,failures)/convert(double,(isnull(total_failure,0)+isnull(successfulCalls,0)))*100),2) as decimal(5,2))
+	else
+		null
+	end as 'Failure Ratio',
+	result_data.CATEGORY_ID as 'CATEGORY_ID',	
+	$MCC as 'MCC'
+from
+	(
+		select 
+			count(1)
+		from
+			#REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_AND_ROAMING_MCC($TECH_PACK_LIST.getAllRawSucTables() "tmpRawSuceesses" $columnsToIncludeInSuccessView)
+	)as rawsuccesses(successfulCalls),
+	(
+		select 
+            CATEGORY_ID,
+			count (*) as failures,
+			count (distinct IMSI) as impacted_subscribers			
+		from 
+			#REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_AND_ROAMING_MCC($TECH_PACK_LIST.getAllRawErrTables() "rawview" $columnsToIncludeInNewView)
+		group by CATEGORY_ID 
+	) as result_data     	 	
+	inner join
+	(
+		select 
+			CATEGORY_ID, 
+			CATEGORY_ID_DESC
+		from 
+			DIM_E_GSM_CFA_EVENTTYPE
+	)
+	as category on result_data.CATEGORY_ID=category.CATEGORY_ID,
+	(
+		select 
+			count (*) as total_failure
+		from 
+			#REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_AND_ROAMING_MCC($TECH_PACK_LIST.getAllRawErrTables() "totalerrrawview" $columnsToIncludeInNewView)
+     ) 
+    as errtotalresult_data 	order by result_data.CATEGORY_ID Desc

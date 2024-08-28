@@ -1,0 +1,127 @@
+##
+## GSM Call Failure Analysis Access Area Event Summary
+##
+## Velocity Parameter: 
+##		HIER321_ID:  Cell Hash Id
+##
+## Named PreparedStatement Parameter:
+##
+##     dateFrom:   starting time
+##     dateTo:     ending time
+##
+
+#set($errrawtables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($sucrawtables=$TECH_PACK_LIST.getAllRawSucTables())
+
+SELECT 
+	#if($count > 0)
+	  top $count
+	#end
+	VENDOR AS 'RAN Vendor', 
+	HIERARCHY_3 AS 'Controller',
+	CATEGORY_ID_DESC As 'Event Type',
+	Failures,
+	IMPACTED_SUBSCRIBERS as 'Impacted Subscriber',
+	case when (FAILURES+isnull(sucdata.SUCCESS,0)+isnull(errtotaldata.TOTAL_FAILURES,0)) != 0
+		then cast(round((convert(double,FAILURES)/convert(double,(errtotaldata.TOTAL_FAILURES+isnull(sucdata.SUCCESS,0)))*100),2) as decimal(5,2))
+		else null 	   	
+    	end as 'Failure Ratio',
+	:HIER321_ID as HIER321_ID,
+	errdata.CATEGORY_ID,
+	HIERARCHY_1 AS 'Access Area'
+FROM 
+(	
+	select 
+		count (*) as failures,
+		CATEGORY_ID,
+		count (distinct rawview.IMSI)
+	from 
+		(
+    		#foreach ($rawtable in $errrawtables)
+    			select			
+    				CATEGORY_ID, IMSI		
+    			from dc.$rawtable 
+    			where
+    				HIER321_ID = :HIER321_ID
+        			and #GET_DATETIME_RANGE()
+        			and #GET_TAC_EXCLUSION()
+    			#if($velocityCount < $errrawtables.size())
+    					union all
+    			#end
+    		#end
+    	) as rawview
+    group by
+    	CATEGORY_ID		
+) 
+as errdata(FAILURES, CATEGORY_ID, IMPACTED_SUBSCRIBERS) 
+inner join DIM_E_GSM_CFA_EVENTTYPE category
+on
+   ( errdata.CATEGORY_ID=category.CATEGORY_ID )
+,
+(	
+	select 
+		count (*) as success
+	from 
+		(
+    		#foreach ($rawtable in $sucrawtables)
+    			select			
+    				HIER321_ID		
+    			from dc.$rawtable 
+    			where
+    				HIER321_ID = :HIER321_ID
+        			and #GET_DATETIME_RANGE()
+        			and #GET_TAC_EXCLUSION()
+    			#if($velocityCount < $sucrawtables.size())
+    					union all
+    			#end
+    		#end
+    	) as sucrawview
+) 
+as sucdata(SUCCESS),
+(	
+	select 
+		count (*) as total_failure
+	from 
+		(
+    		#foreach ($rawtable in $errrawtables)
+    			select			
+    				HIER321_ID		
+    			from dc.$rawtable 
+    			where
+    				HIER321_ID = :HIER321_ID
+        			and #GET_DATETIME_RANGE()
+        			and #GET_TAC_EXCLUSION()
+    			#if($velocityCount < $errrawtables.size())
+    					union all
+    			#end
+    		#end
+    	) as totalerrrawview
+) 
+as totalerrdata,
+(
+	select distinct VENDOR, HIERARCHY_3, HIERARCHY_1 from DIM_E_SGEH_HIER321
+	where RAT=0
+	and HIER321_ID = :HIER321_ID
+) 
+AS topology(VENDOR, HIERARCHY_3, HIERARCHY_1),
+(	
+	select 
+		count (*) as total_failures
+		from 
+		(
+    		#foreach ($rawtable in $errrawtables)
+    			select			
+    				CATEGORY_ID, IMSI		
+    			from dc.$rawtable 
+    			where
+    				HIER321_ID = :HIER321_ID
+        			and #GET_DATETIME_RANGE()
+        			and #GET_TAC_EXCLUSION()
+    			#if($velocityCount < $errrawtables.size())
+    					union all
+    			#end
+    		#end
+    	) as rawtotalview	
+) 
+as errtotaldata(TOTAL_FAILURES)
+ORDER BY errdata.CATEGORY_ID Desc

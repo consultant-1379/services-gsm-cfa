@@ -1,0 +1,116 @@
+##
+## GSM Call Failure Analysis Access Area Distribution Event Summary Aggregation by BSC
+##
+## Velocity Parameter: 
+##		HIER3_ID:  Controller Hash Id
+##		CATEGORY_ID
+##      CATEGORY_ID_DESC
+## Named PreparedStatement Parameter:
+##
+##     dateFrom:   starting time
+##     dateTo:     ending time
+##
+
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+
+SELECT 
+	#if($count > 0)
+	  top $count
+	#end
+	VENDOR AS 'RAN Vendor', 
+	HIERARCHY_1 AS 'Access Area',
+	'$CATEGORY_ID_DESC' AS 'Event Type',
+	NO_OF_FAILURES AS 'Failures',
+	IMPACTED_SUBSCRIBERS as 'Impacted Subscriber',
+	case when (isnull(total_failure,0)+isnull(NO_OF_SUCCESSES,0)) != 0
+		then cast(round((convert(double,isnull(NO_OF_FAILURES,0))/convert(double,(isnull(total_failure,0)+isnull(NO_OF_SUCCESSES,0)))*100),2) as decimal(5,2))
+		else null 	   	
+    	end as 'Failure Ratio',
+	errAggView.HIER321_ID,
+	:CATEGORY_ID AS 'CATEGORY_ID',
+	'$CONTROLLER' AS 'Controller'
+FROM 
+(
+	select 
+		sum(NO_OF_ERRORS), HIER321_ID
+	from 
+		$errAggregationView as errTempAgg
+	where	
+		errTempAgg.HIER3_ID = :HIER3_ID
+	and
+		errTempAgg.CATEGORY_ID = :CATEGORY_ID
+	and
+		#GET_DATETIME_RANGE()
+	group by
+		HIER321_ID
+) 
+AS errAggView(NO_OF_FAILURES, HIER321_ID)	
+,
+(
+	select
+		sum(NO_OF_SUCCESSES),
+		HIER321_ID
+	from 
+		$sucAggregationView as sucTempAgg
+	where	
+		sucTempAgg.HIER3_ID = :HIER3_ID
+	and
+		#GET_DATETIME_RANGE()
+	group by
+		HIER321_ID
+)
+AS sucAggView(NO_OF_SUCCESSES, HIER321_ID)
+,
+(
+	select
+		sum(NO_OF_ERRORS),
+		HIER321_ID
+	from 
+		$errAggregationView as errTempAgg
+	where	
+		errTempAgg.HIER3_ID = :HIER3_ID
+	and
+		#GET_DATETIME_RANGE()
+	group by
+		HIER321_ID
+)
+AS totalErrAggView(total_failure, HIER321_ID)
+,
+(
+	select count(distinct rawview.IMSI), HIER321_ID from
+	(
+		#foreach ($rawtable in $rawtables)
+			select			
+				IMSI, HIER321_ID		
+			from $rawtable 
+			where
+			HIER3_ID = :HIER3_ID
+			and CATEGORY_ID = :CATEGORY_ID
+			and #GET_DATETIME_RANGE()
+			and #GET_TAC_EXCLUSION()
+			#if($velocityCount < $rawtables.size())
+					union all
+			#end
+		#end
+	) as rawview
+	group by
+		HIER321_ID
+) 
+AS subscribers(IMPACTED_SUBSCRIBERS, HIER321_ID)
+,
+(
+	select distinct VENDOR, HIERARCHY_1, HIER321_ID from dc.DIM_E_SGEH_HIER321 where RAT=0 and HIER3_ID = :HIER3_ID
+) 
+AS topology(VENDOR, HIERARCHY_1,HIER321_ID)
+
+WHERE
+	errAggView.HIER321_ID *= topology.HIER321_ID
+AND
+	errAggView.HIER321_ID *= sucAggView.HIER321_ID
+AND
+	errAggView.HIER321_ID *= subscribers.HIER321_ID 
+AND 
+	errAggView.HIER321_ID = totalErrAggView.HIER321_ID
+ORDER BY
+	Failures DESC

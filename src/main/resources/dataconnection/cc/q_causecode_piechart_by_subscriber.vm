@@ -1,0 +1,59 @@
+##
+## GSM Data Connection Cause Code Analysis by Subscriber (using raw tables)
+##
+## Velocity Parameter: 
+## 		isSuccessCauseCodeRequired	boolean
+##		isErrorCauseCodeRequired	boolean
+##		causeCodeIds				String, comma separated list of cause code ids
+##		
+## Named PreparedStatement Parameter:
+##
+##	   :IMSI:   
+##
+
+#set($successColumnsToSelect=["NO_OF_SUCCESSES"])
+#set($successColumnsToFilter=["IMSI"])
+#set($successExtraWhereConditions=["NO_OF_SUCCESSES<>0"])
+
+#set($errorColumnsToSelect=["TBF_RELEASE_CAUSE, NO_OF_ERRORS"])
+#set($errorColumnsToFilter=["IMSI"])
+#set($errorExtraWhereConditions=["TBF_RELEASE_CAUSE in ($causeCodeIds)", "NO_OF_ERRORS<>0"])
+	
+
+#if($isSuccessCauseCodeRequired)
+    select 
+        'succ' as cc_id, 
+        'Successes' as cc_desc, 
+        isnull(sum(success_events.NO_OF_SUCCESSES),0) as NO_OF_OCCURRENCES,
+        0 as NO_OF_IMPACTED_SUBSCRIBERS
+    from 
+		#REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_SPECIFY_COLUMNS_EXTRA_WHERE_COND($TECH_PACK_LIST.getAllRawTablesWithMeasurementType() "success_events" $successColumnsToSelect $successColumnsToFilter $successExtraWhereConditions)
+#end
+
+#if($isSuccessCauseCodeRequired && $isErrorCauseCodeRequired)		
+	union
+#end
+
+#if($isErrorCauseCodeRequired)
+    select 
+        CAST(cc_id as varchar(4)),
+        cc_desc,
+        NO_OF_OCCURRENCES,
+        1 as NO_OF_IMPACTED_SUBSCRIBERS
+    from
+    (
+        select 
+            error_events.TBF_RELEASE_CAUSE as cc_id,
+			dimCC.TBF_RELEASE_CAUSE_DESC as cc_desc,
+            isnull(sum(NO_OF_ERRORS),0) as NO_OF_OCCURRENCES
+        from 
+			#REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_SPECIFY_COLUMNS_EXTRA_WHERE_COND($TECH_PACK_LIST.getAllRawTablesWithMeasurementType() "error_events" $errorColumnsToSelect $errorColumnsToFilter $errorExtraWhereConditions)
+        ##group by error_events.TBF_RELEASE_CAUSE	
+    , dc.DIM_E_GSM_PS_TBF_RELEASE_CAUSE dimCC
+	where 
+		dimCC.TBF_RELEASE_CAUSE = error_events.TBF_RELEASE_CAUSE
+	group by error_events.TBF_RELEASE_CAUSE, dimCC.TBF_RELEASE_CAUSE_DESC
+	) as errors
+		
+#end
+

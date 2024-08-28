@@ -1,0 +1,69 @@
+##
+## GSM Data Connection Cause Code Analysis by Subscriber Group (using raw tables)
+##
+## Velocity Parameter: 
+## 		isSuccessCauseCodeRequired	boolean
+##		isErrorCauseCodeRequired	boolean
+##		causeCodeIds				String, comma separated list of cause code ids
+##		
+## Named PreparedStatement Parameter:
+##
+##	   :groupname   
+##
+
+#set($successColumnsToSelect=["IMSI, NO_OF_SUCCESSES"])
+#set($errorColumnsToSelect=["IMSI, TBF_RELEASE_CAUSE, NO_OF_ERRORS"])
+
+select 
+	*
+from
+(
+#if($isSuccessCauseCodeRequired)
+    select 
+        'succ' as cc_id, 
+        'Successes' as cc_desc, 
+        isnull(sum(success_events.NO_OF_SUCCESSES),0) as NO_OF_OCCURRENCES,
+        0 as NO_OF_IMPACTED_SUBSCRIBERS
+    from 
+        #REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_SPECIFY_COLUMNS($TECH_PACK_LIST.getAllRawTablesWithMeasurementType() "success_events" $successColumnsToSelect)
+			, GROUP_TYPE_E_IMSI
+    where 
+            NO_OF_SUCCESSES<>0
+        	and success_events.IMSI=GROUP_TYPE_E_IMSI.IMSI
+        	and GROUP_TYPE_E_IMSI.GROUP_NAME = :groupname 
+#end
+
+#if($isSuccessCauseCodeRequired && $isErrorCauseCodeRequired)		
+	union
+#end
+
+#if($isErrorCauseCodeRequired)
+    select 
+        CAST(cc_id as varchar(4)) as cc_id,
+        dimCC.TBF_RELEASE_CAUSE_DESC as cc_desc,
+        NO_OF_OCCURRENCES,
+        NO_OF_IMPACTED_SUBSCRIBERS
+    from
+    (
+        select 
+            error_events.TBF_RELEASE_CAUSE as cc_id, 
+            isnull(sum(NO_OF_ERRORS),0) as NO_OF_OCCURRENCES,
+            count(distinct(error_events.IMSI)) as NO_OF_IMPACTED_SUBSCRIBERS
+        from 
+            #REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_SPECIFY_COLUMNS($TECH_PACK_LIST.getAllRawTablesWithMeasurementType() "error_events" $errorColumnsToSelect)
+				, GROUP_TYPE_E_IMSI
+        where 
+        		NO_OF_ERRORS<>0
+				and error_events.TBF_RELEASE_CAUSE in ($causeCodeIds)
+        		and error_events.IMSI=GROUP_TYPE_E_IMSI.IMSI
+        		and GROUP_TYPE_E_IMSI.GROUP_NAME = :groupname 
+        group by error_events.TBF_RELEASE_CAUSE	
+    ) errors, dc.DIM_E_GSM_PS_TBF_RELEASE_CAUSE dimCC
+	where 
+		dimCC.TBF_RELEASE_CAUSE = errors.cc_id
+#end
+
+	) as ccList	
+ORDER BY
+	cc_id
+

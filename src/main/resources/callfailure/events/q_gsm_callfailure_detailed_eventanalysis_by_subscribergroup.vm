@@ -1,0 +1,97 @@
+##
+## GSM Call Failure Detailed Event Analysis by Subscriber (using raw tables)
+##
+## Velocity Parameter:
+##
+##     
+##		
+## Named PreparedStatement Parameter:
+##
+##	   :CATEGORY_ID		CallSetupFail (456) or CallDropFail (438) ID received from Service
+##     :groupname		IMSI group name
+##     :TECH_PACK_LIST	tables that should be used in query, see TechPackList javadoc
+##	   :count 	   max number of rows
+##     :dateFrom   starting time
+##     :dateTo     ending time
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+
+SELECT
+	
+	#if($count > 0)
+	  top $count
+	#end
+
+	#if($csv == true)
+   	      DATEADD(minute,$tzOffset,rawview.EVENT_TIME)AS 'Event Time',
+   	    #else
+   	      rawview.EVENT_TIME AS 'Event Time',
+   	    #end 
+
+	IMSI,
+	rawview.MSISDN AS MSISDN,
+	rawview.TAC AS TAC, 
+	DIM_E_SGEH_TAC.MANUFACTURER AS 'Terminal Make', 
+	DIM_E_SGEH_TAC.MARKETING_NAME AS 'Terminal Model', 
+	DIM_E_GSM_CFA_EVENTTYPE.CATEGORY_ID_DESC AS 'Event Type',
+	DIM_E_GSM_CFA_RELEASE_TYPE.RELEASE_TYPE_DESC AS 'Release Type',
+	DIM_E_GSM_CFA_CAUSE_GROUP.CAUSE_GROUP_DESC AS 'Cause Group',    
+	DIM_E_GSM_CFA_EXTENDED_CAUSE.EXTENDED_CAUSE_DESC AS 'Extended Cause Value',
+	DIM_E_GSM_CFA_VAMOS_NEIGHBOR_INDICATOR.VAMOS_PAIR_ALLOCATION_BY_MS AS 'VAMOS Pair Allocation by MS',
+	DIM_E_GSM_CFA_RSAI.RSAI_DESC AS 'RSAI',
+	DIM_E_GSM_CFA_CHANNEL_TYPE.CHANNEL_TYPE_DESC AS 'Channel Type',
+	DIM_E_GSM_CFA_URGENCY_CONDITION.URGENCY_CONDITION_DESC AS 'Urgency Condition',
+	topology.VENDOR AS 'RAN Vendor',
+	topology.HIERARCHY_3 AS 'Controller',
+	topology.HIERARCHY_1 AS 'Access Area',
+	topology.HIER3_ID AS HIER3_ID,
+	topology.HIER321_ID AS HIER321_ID
+FROM
+		(
+		#foreach ($rawtable in $rawtables)
+			select			
+				EVENT_TIME, RELEASE_TYPE, TAC, MSISDN, VAMOS_NEIGHBOR_INDICATOR, RSAI, CHANNEL_TYPE, URGENCY_CONDITION, CATEGORY_ID, HIER3_ID, HIER321_ID, CAUSE_GROUP, EXTENDED_CAUSE, 
+				grp.IMSI		
+			from 
+				dc.$rawtable raw,
+				GROUP_TYPE_E_IMSI grp
+			where
+    			raw.IMSI = grp.IMSI and
+				grp.GROUP_NAME = :groupname and
+				CATEGORY_ID = :CATEGORY_ID AND
+    			#GET_DATETIME_RANGE()
+    			and #GET_TAC_EXCLUSION()
+    			#if($velocityCount < $rawtables.size())
+    					union all
+    			#end
+		#end
+	) as rawview
+	,DIM_E_SGEH_TAC,
+	DIM_E_GSM_CFA_EVENTTYPE,
+	DIM_E_GSM_CFA_URGENCY_CONDITION, 
+	DIM_E_GSM_CFA_EXTENDED_CAUSE,
+	DIM_E_GSM_CFA_RELEASE_TYPE,
+	DIM_E_GSM_CFA_VAMOS_NEIGHBOR_INDICATOR,
+	DIM_E_GSM_CFA_RSAI,
+	DIM_E_GSM_CFA_CHANNEL_TYPE,
+	DIM_E_GSM_CFA_CAUSE_GROUP,
+	DIM_E_GSM_CFA_EXTENDED_CAUSE,
+	((select distinct HIER3_ID, HIER321_ID,HIERARCHY_1,HIERARCHY_3,VENDOR from DIM_E_SGEH_HIER321 where RAT = 0) 
+	as topology(HIER3_ID, HIER321_ID,HIERARCHY_1,HIERARCHY_3,VENDOR))
+WHERE
+	rawview.HIER321_ID *= topology.HIER321_ID AND 
+	rawview.TAC *= DIM_E_SGEH_TAC.TAC AND
+	DIM_E_GSM_CFA_EVENTTYPE.CATEGORY_ID = :CATEGORY_ID AND
+	rawview.RELEASE_TYPE = DIM_E_GSM_CFA_RELEASE_TYPE.RELEASE_TYPE AND
+	rawview.VAMOS_NEIGHBOR_INDICATOR = DIM_E_GSM_CFA_VAMOS_NEIGHBOR_INDICATOR.VAMOS_NEIGHBOR_INDICATOR AND
+	rawview.RSAI = DIM_E_GSM_CFA_RSAI.RSAI AND
+	rawview.CHANNEL_TYPE = DIM_E_GSM_CFA_CHANNEL_TYPE.CHANNEL_TYPE AND
+	rawview.URGENCY_CONDITION = DIM_E_GSM_CFA_URGENCY_CONDITION.URGENCY_CONDITION AND
+	rawview.CAUSE_GROUP = DIM_E_GSM_CFA_CAUSE_GROUP.CAUSE_GROUP AND
+	rawview.EXTENDED_CAUSE = DIM_E_GSM_CFA_EXTENDED_CAUSE.EXTENDED_CAUSE
+ORDER BY
+	rawview.EVENT_TIME desc
+
+	
+	

@@ -1,0 +1,115 @@
+##
+## GSM Call Failure Analysis BSC event summary (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :HIER3_ID   The hash id of the controller(BSC)
+##
+
+#set($rawErrTables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($rawSuccesTables=$TECH_PACK_LIST.getAllRawSucTables())
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	VENDOR AS 'RAN Vendor',
+	HIERARCHY_3 AS 'Controller',
+	CATEGORY_ID_DESC AS 'Event Type',
+	failures AS 'Failures',
+	impacted_subscribers AS 'Impacted Subscribers',
+	impacted_cells AS 'Impacted Cells',
+	case when ((isnull(total_failure,0) + isnull(successfulCalls,0)) != 0)
+	then
+		cast (round((( cast(isnull(failures,0) as decimal(10,2)) / 
+	       ( cast(isnull(total_failure,0) as decimal(10,2)) + cast(isnull(successfulCalls,0) as decimal(10,2)))) * 
+	         100),2)  as numeric(5,2) )
+	else
+		null
+	end as 'Failure Ratio',
+	result_data.CATEGORY_ID as 'CATEGORY_ID',
+	:HIER3_ID as 'HIER3_ID'
+from
+	(
+		select 
+			count(1)
+		from
+		(
+        	#foreach ($succesRawTable in $rawSuccesTables)
+        		select			
+        			HIER3_ID	
+        		from dc.$succesRawTable
+				where
+					HIER3_ID = :HIER3_ID
+					and #GET_DATETIME_RANGE()
+					and #GET_TAC_EXCLUSION()
+        		#if($velocityCount < $rawSuccesTables.size())
+        				union all
+        		#end
+        	#end
+		) as tmpRawSuceesses
+	)as rawsuccesses(successfulCalls),
+	(
+		select 
+			CATEGORY_ID,
+			count (*) as failures,
+			count (distinct IMSI) as impacted_subscribers,
+			count (distinct HIER321_ID) as impacted_cells
+		from 
+			(
+        		#foreach ($rawtable in $rawErrTables)
+        			select			
+        				CATEGORY_ID, IMSI, HIER321_ID	
+        			from dc.$rawtable
+        			where
+						HIER3_ID = :HIER3_ID
+						and #GET_DATETIME_RANGE()
+						and #GET_TAC_EXCLUSION()
+        			#if($velocityCount < $rawErrTables.size())
+        					union all
+        			#end
+        		#end
+        	) as rawview
+		group by CATEGORY_ID 
+	) as result_data 
+	inner join
+	(
+		select 
+			CATEGORY_ID, 
+			CATEGORY_ID_DESC
+		from 
+			DIM_E_GSM_CFA_EVENTTYPE
+	)
+	as category on result_data.CATEGORY_ID=category.CATEGORY_ID,
+	( 
+		select 
+			distinct HIERARCHY_3,VENDOR 
+		from 
+			DIM_E_SGEH_HIER321
+		where 
+			RAT=0
+			and HIER3_ID = :HIER3_ID
+	) 
+	as hier_table 
+	,
+	(
+		select 
+			count (*) as total_failure
+		from 
+		(
+		#foreach ($rawtable in $rawErrTables)
+			select			
+				HIER3_ID	
+			from dc.$rawtable
+			where	
+			    HIER3_ID = :HIER3_ID AND
+    			#GET_DATETIME_RANGE() AND
+				#GET_TAC_EXCLUSION()
+    			#if($velocityCount < $rawErrTables.size())
+    					union all
+    			#end
+		#end
+		) as totalerrrawview
+	) 
+as errtotalresult_data order by CATEGORY_ID Desc

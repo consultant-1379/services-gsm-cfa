@@ -1,0 +1,59 @@
+##
+## GSM Data Connection Cause Code Analysis by Subscriber Group (using raw tables)
+##
+## Velocity Parameter: 
+##
+## Named PreparedStatement Parameter:
+##
+##	   :groupname   
+##
+
+#set($successColumnsToSelect=["IMSI, NO_OF_SUCCESSES"])
+#set($errorColumnsToSelect=["IMSI, TBF_RELEASE_CAUSE, NO_OF_ERRORS"])
+
+#set($columnsToSelect=["IMSI, TBF_RELEASE_CAUSE"])
+#set($columnsToFilter=[])
+#set($errorCondition=["NO_OF_ERRORS<>0"])
+#set($successCondition=["NO_OF_SUCCESSES<>0"])
+
+#set($joinTables=[])
+
+select 
+	*
+from
+	(
+        select 
+            'succ' as cc_id, 
+            'Successes' as cc_desc 
+        from 
+            #REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_SPECIFY_COLUMNS_EXTRA_WHERE_COND_AND_TAC_EXCLUSION($TECH_PACK_LIST.getAllRawTablesWithMeasurementType() "events" $joinTables $columnsToSelect $columnsToFilter $successCondition)
+			, GROUP_TYPE_E_IMSI
+        where 
+        	events.IMSI=GROUP_TYPE_E_IMSI.IMSI
+        	and GROUP_TYPE_E_IMSI.GROUP_NAME = :groupname 
+            
+        
+        union
+        
+        select 
+            CAST(errors.cc_id as varchar(4)),
+            dimCC.TBF_RELEASE_CAUSE_DESC as cc_desc
+        from
+        (
+        
+            select 
+                events.TBF_RELEASE_CAUSE as cc_id
+            from 
+                #REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_SPECIFY_COLUMNS_EXTRA_WHERE_COND_AND_TAC_EXCLUSION($TECH_PACK_LIST.getAllRawTablesWithMeasurementType() "events" $joinTables $columnsToSelect $columnsToFilter $errorCondition)
+				, GROUP_TYPE_E_IMSI
+            where 
+        		events.IMSI=GROUP_TYPE_E_IMSI.IMSI
+        		and GROUP_TYPE_E_IMSI.GROUP_NAME = :groupname 
+            group by events.TBF_RELEASE_CAUSE	
+        ) errors, dc.DIM_E_GSM_PS_TBF_RELEASE_CAUSE dimCC
+        where 
+        		dimCC.TBF_RELEASE_CAUSE = errors.cc_id
+	) as ccList	
+ORDER BY
+	cc_id
+

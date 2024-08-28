@@ -1,0 +1,47 @@
+#DEFINE_CONSTANTS()
+
+select
+	err.SUB_CAUSE_CODE as "Extended Cause ID",
+	err.SUB_CAUSE_CODE_DESC as "Extended Cause Value",
+	count(*) as "Failures",
+	isnull(count(distinct(IMSI)),0) as "Impacted Subscribers"
+	,:GROUP_NAME as GroupName
+	,'$CAUSE_VALUE' as "Cause Group"
+	,:CAUSE_GROUP as "Cause Group ID"
+	
+	
+from 
+(
+	#foreach ($errtable in $TECH_PACK_LIST.getAllRawTables())
+        (
+        select	
+        	sccref.EXTENDED_CAUSE, 
+        	EXTENDED_CAUSE_DESC, 
+        	IMSI
+        from
+        	dc.${errtable} errRef,
+        	dc.DIM_E_GSM_CFA_EXTENDED_CAUSE sccref,
+			dc.GROUP_TYPE_E_RAT_VEND_HIER3 controllerGroup
+        where
+        	#GET_DATETIME_RANGE()
+        	and controllerGroup.GROUP_NAME = :GROUP_NAME
+        	and controllerGroup.HIER3_ID = errRef.HIER3_ID	
+        	and errRef.CAUSE_GROUP = :CAUSE_GROUP
+        	and #GET_TAC_EXCLUSION()
+        	and sccref.EXTENDED_CAUSE = errRef.EXTENDED_CAUSE
+			#if($CATEGORY_ID != "")	
+				and
+				errRef.CATEGORY_ID = :CATEGORY_ID
+			#end
+        )	
+		#if($velocityCount < $TECH_PACK_LIST.getAllRawTables().size())
+			union all
+		#end
+	#end
+) as err (SUB_CAUSE_CODE, SUB_CAUSE_CODE_DESC, IMSI)
+group by
+	err.SUB_CAUSE_CODE,
+	err.SUB_CAUSE_CODE_DESC	
+order by
+	Failures DESC
+	

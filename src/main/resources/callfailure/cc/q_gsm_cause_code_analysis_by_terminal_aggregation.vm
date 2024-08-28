@@ -1,0 +1,77 @@
+#DEFINE_CONSTANTS()
+
+select
+    :TAC as 'TAC',
+    '$MANUFACTURER' as Manufacturer,
+	'$MODEL' as Model,
+	'$failure_type' as 'Event Type',
+	events.CAUSE_GROUP as 'Cause Group ID',
+	events.CAUSE_GROUP_DESC as 'Cause Group',
+	events.NO_OF_ERRORS as 'Failures',
+	isnull(subscribers.NO_OF_SUBSCRIBERS,0) as 'Impacted Subscribers',
+	:CATEGORY_ID as 'CATEGORY_ID'
+	
+      
+	
+from
+	(
+	select
+    	err.CAUSE_GROUP as CAUSE_GROUP,
+    	err.CAUSE_GROUP_DESC as CAUSE_GROUP_DESC,
+    	sum(isnull(err.NO_OF_ERRORS, 0)) as NO_OF_ERRORS
+    from 
+    	(
+        select	
+        	ccref.CAUSE_GROUP, 
+        	CAUSE_GROUP_DESC, 
+        	sum(NO_OF_ERRORS)
+        from
+        	dc.${errAggregationView} errRef,
+        	dc.DIM_E_GSM_CFA_CAUSE_GROUP ccref
+        where
+        	#GET_DATETIME_RANGE()
+        	and TAC = :TAC
+        	and ccref.CAUSE_GROUP = errRef.CAUSE_GROUP
+            and errRef.CATEGORY_ID = :CATEGORY_ID            	
+        group by
+        	ccref.CAUSE_GROUP,
+        	CAUSE_GROUP_DESC
+    	) as err (CAUSE_GROUP, CAUSE_GROUP_DESC, NO_OF_ERRORS)
+    group by
+    	err.CAUSE_GROUP,
+    	err.CAUSE_GROUP_DESC
+    ) events,
+    (
+	select
+    	sub.CAUSE_GROUP as CAUSE_GROUP,
+    	isnull(count(distinct(IMSI)),0) as NO_OF_SUBSCRIBERS
+    from 
+    	(
+    	#foreach ($errtable in $TECH_PACK_LIST.getAllRawTables())
+    	(
+        select	
+        	CAUSE_GROUP,
+        	IMSI
+        from
+        	dc.${errtable}
+        where
+        	#GET_DATETIME_RANGE()
+        	and #GET_TAC_EXCLUSION()
+			and TAC = :TAC
+			and	CATEGORY_ID = :CATEGORY_ID
+        group by
+        	CAUSE_GROUP,
+        	IMSI
+        )
+    		#if($velocityCount < $TECH_PACK_LIST.getAllRawTables().size())
+    			union all
+    		#end
+    	#end
+    	) as sub (CAUSE_GROUP, IMSI)
+    group by
+    	sub.CAUSE_GROUP) subscribers
+where
+	events.CAUSE_GROUP *= subscribers.CAUSE_GROUP
+order by
+	Failures DESC
+	

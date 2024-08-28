@@ -1,0 +1,54 @@
+##
+## GSM Call Failure Analysis Cause Code Analysis
+##
+## Velocity Parameter: 
+##
+##
+## Named PreparedStatement Parameter:
+##
+##	    $causeCodeDescription
+##		:CATEGORY_ID
+##      :URGENCY_CONDITION
+##      :EXTENDED_CAUSE
+##	    $subCauseCodeDescription
+##
+##
+#set($columnsToSelect=["HIER321_ID, EVENT_TIME, IMSI, RELEASE_TYPE, TAC, EXTENDED_CAUSE"])
+#set($columnsToFilter=["CATEGORY_ID", "URGENCY_CONDITION", "EXTENDED_CAUSE"])
+
+SELECT 
+
+	#if($count > 0)
+	  top $count
+	#end
+	
+	#if($csv == true)
+   	      DATEADD(minute,$tzOffset,rawview.EVENT_TIME)AS 'Event Time',
+   	    #else
+   	      rawview.EVENT_TIME AS 'Event Time',
+   	    #end 
+
+	rawview.IMSI AS IMSI,
+	rawview.TAC AS TAC, 
+	DIM_E_SGEH_TAC.MANUFACTURER AS 'Terminal Make', 
+	DIM_E_SGEH_TAC.MARKETING_NAME AS 'Terminal Model',
+	topology.HIERARCHY_3 AS 'Controller',
+	topology.HIERARCHY_1 AS 'Access Area',
+	DIM_E_GSM_CFA_EVENTTYPE.CATEGORY_ID_DESC AS 'Event Type',
+	DIM_E_GSM_CFA_RELEASE_TYPE.RELEASE_TYPE_DESC AS 'Release Type',
+	'$causeCodeDescription' AS 'Cause Value',
+	'$subCauseCodeDescription' AS 'Extended Cause Value'
+FROM 
+	#REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_WITH_TAC_EXCLUSION_SPECIFY_COLUMNS($TECH_PACK_LIST.getAllRawTables() "rawview" $columnsToFilter $columnsToSelect)
+	,DIM_E_SGEH_TAC,
+	DIM_E_GSM_CFA_EVENTTYPE,
+	DIM_E_GSM_CFA_RELEASE_TYPE,
+	((select distinct HIER321_ID,HIERARCHY_1,HIERARCHY_3 from DIM_E_SGEH_HIER321 where RAT = 0) 
+	as topology(HIER321_ID,HIERARCHY_1,HIERARCHY_3))
+WHERE 
+	DIM_E_GSM_CFA_EVENTTYPE.CATEGORY_ID = :CATEGORY_ID AND 
+	rawview.HIER321_ID *= topology.HIER321_ID AND
+	rawview.TAC *= DIM_E_SGEH_TAC.TAC AND
+	rawview.RELEASE_TYPE = DIM_E_GSM_CFA_RELEASE_TYPE.RELEASE_TYPE
+ORDER BY
+	rawview.EVENT_TIME desc

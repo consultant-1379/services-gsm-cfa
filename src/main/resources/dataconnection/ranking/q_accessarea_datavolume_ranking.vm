@@ -1,0 +1,55 @@
+##
+## GSM DataVolume ranking for BSC/CELL
+##
+##
+## Template parameters:
+##   
+##   type "CELL"
+##   datavolumetype  "UPLINK", "DOWNLINK" or "TOTAL"
+##   timerange "TR_1" "TR_3" "TR_4"
+##
+
+######################## Set template variables #######################
+
+#set($columnsToSelect=["HIER321_ID", "DOWNLOAD_DATA_VOLUME", "UPLOAD_DATA_VOLUME", "TOTAL_DATA_VOLUME"])
+#set($columnToGroupBy="HIER321_ID")
+#set($B_2_MB=1048576)
+#set($B_2_KB=1024)
+
+######################## SQL #######################
+SELECT 
+#if($count > 0)
+    top $count
+#end
+Rank,
+VENDOR,
+HIERARCHY_3,
+HIERARCHY_1,
+convert(numeric(16,2), convert(numeric(16,2), DOWNLINK_DATA_VOLUME)/$B_2_MB) AS 'Downlink Data Volume (MB)',
+convert(numeric(16,2), convert(numeric(16,2), UPLINK_DATA_VOLUME)/$B_2_MB) AS 'Uplink Data Volume (MB)',
+convert(numeric(16,2), convert(numeric(16,2), TOTAL_DATA_VOLUME)/$B_2_MB) AS 'Total Data Volume (MB)',
+HIER321_ID
+FROM
+(SELECT
+  Rank() Over (ORDER BY TOTAL_DATA_VOLUME DESC) AS Rank,
+  VENDOR,
+  HIERARCHY_3,
+  HIERARCHY_1,
+  DOWNLINK_DATA_VOLUME,
+  UPLINK_DATA_VOLUME,
+  TOTAL_DATA_VOLUME,
+  data_table.HIER321_ID
+FROM
+(
+SELECT 
+  $columnToGroupBy, 
+  SUM(ISNULL(DOWNLOAD_DATA_VOLUME, 0)) AS DOWNLINK_DATA_VOLUME,
+  SUM(ISNULL(UPLOAD_DATA_VOLUME, 0)) AS UPLINK_DATA_VOLUME,
+  SUM(ISNULL(TOTAL_DATA_VOLUME, 0)) AS TOTAL_DATA_VOLUME
+FROM
+  #REPLACE_RAW_VIEW_WITH_RAW_TABLES_WITH_TAC_EXCLUSION_SPECIFY_COLUMNS_AND_NOT_NULL_COLUMNS($TECH_PACK_LIST.getAllRawTablesWithMeasurementType() "rawview" $columnsToSelect [$columnToGroupBy])
+  GROUP BY $columnToGroupBy
+) AS data_table  
+LEFT OUTER JOIN  
+(SELECT VENDOR, HIERARCHY_3, HIERARCHY_1, HIER321_ID FROM DIM_E_SGEH_HIER321)as hier_table
+on data_table.$columnToGroupBy = hier_table.$columnToGroupBy) as result_data

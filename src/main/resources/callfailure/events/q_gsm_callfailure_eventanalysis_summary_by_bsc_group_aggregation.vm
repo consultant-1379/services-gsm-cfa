@@ -1,0 +1,106 @@
+##
+## GSM Call Failure Analysis BSC event summary (using aggregation tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :groupname  The name of the BSC group
+##
+#set($columnsToSelect="HIER3_ID, CATEGORY_ID, IMSI")
+#set($rawtables=$TECH_PACK_LIST.getAllRawErrTables())
+#set($sucrawtables=$TECH_PACK_LIST.getAllRawSucTables())
+
+select
+	#if($count > 0)
+	  top $count
+	#end
+	CATEGORY_ID_DESC AS 'Event Type',
+	NO_OF_FAILURES AS 'Failures', 
+	IMPACTED_SUBSCRIBERS AS 'Impacted Subscriber',
+	case when (isnull(NO_OF_TOTAL_FAILURES,0)+isnull(successfulCalls,0)) != 0
+		 then cast(round((convert(double,NO_OF_FAILURES)/convert(double,(isnull(NO_OF_TOTAL_FAILURES,0)+isnull(successfulCalls,0)))*100),2) as decimal(5,2))
+		 else null  
+	end as 'Failure Ratio',
+	aggView.CATEGORY_ID as 'CATEGORY_ID',
+	:groupname as 'Group Name'	
+from
+(
+	select 
+		sum( isnull(NO_OF_ERRORS, 0) ), CATEGORY_ID
+	from 
+		$errAggregationView as errorAggregationView,
+		GROUP_TYPE_E_RAT_VEND_HIER3
+	where	
+		GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname AND
+		GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID = errorAggregationView.HIER3_ID
+		and
+		#GET_DATETIME_RANGE()
+	group by
+		CATEGORY_ID
+) 
+as aggView(NO_OF_FAILURES, CATEGORY_ID)	
+left outer join
+(
+	select count(distinct rawview.IMSI), CATEGORY_ID from
+		(
+    		#foreach ($rawtable in $rawtables)
+    			select			
+    				IMSI, CATEGORY_ID		
+    			from 
+					dc.$rawtable raw
+					,GROUP_TYPE_E_RAT_VEND_HIER3
+				where 
+					GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname
+					and GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID = raw.HIER3_ID
+					and #GET_DATETIME_RANGE()
+					and #GET_TAC_EXCLUSION()
+    			#if($velocityCount < $rawtables.size())
+    					union all
+    			#end
+    		#end
+    	) as rawview
+	group by
+		CATEGORY_ID
+) 
+as subscribers(IMPACTED_SUBSCRIBERS, CATEGORY_ID)
+on 
+(		
+	aggView.CATEGORY_ID = subscribers.CATEGORY_ID
+)
+inner join
+(
+	select 
+		CATEGORY_ID, 
+		CATEGORY_ID_DESC
+	from 
+		DIM_E_GSM_CFA_EVENTTYPE
+)
+as category on aggView.CATEGORY_ID=category.CATEGORY_ID,
+(
+select 
+		sum( isnull(NO_OF_ERRORS, 0) )
+	from 
+		$errAggregationView as errorAggregationView,
+		GROUP_TYPE_E_RAT_VEND_HIER3
+	where	
+		GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname AND
+		GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID = errorAggregationView.HIER3_ID
+		and
+		#GET_DATETIME_RANGE()
+) 
+as totalView(NO_OF_TOTAL_FAILURES),
+(
+	select 
+		sum( isnull(NO_OF_SUCCESSES, 0) )
+	from 
+		$sucAggregationView as sucAggregationView,
+		GROUP_TYPE_E_RAT_VEND_HIER3
+	where	
+		GROUP_TYPE_E_RAT_VEND_HIER3.GROUP_NAME = :groupname AND
+		GROUP_TYPE_E_RAT_VEND_HIER3.HIER3_ID = sucAggregationView.HIER3_ID
+		and
+		#GET_DATETIME_RANGE()
+		
+)
+as rawsuccesses(successfulCalls)
+order by aggView.CATEGORY_ID desc

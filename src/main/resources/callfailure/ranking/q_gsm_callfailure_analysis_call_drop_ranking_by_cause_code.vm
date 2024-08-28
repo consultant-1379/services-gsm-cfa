@@ -1,0 +1,41 @@
+##
+## GSM Call Failure Analysis Access Area Ranking (using raw tables)
+##
+##
+## Named PreparedStatement Parameter:
+##
+##     :dateFrom   starting time
+##     :dateTo     ending time
+##
+
+#set($rawtables=$TECH_PACK_LIST.getAllRawTables())
+
+SELECT 
+	#if($count > 0)
+	  top $count
+	#end
+	RANK() Over (ORDER BY Failures DESC) AS Rank, 
+	DIM_E_GSM_CFA_URGENCY_CONDITION.URGENCY_CONDITION_DESC AS 'Cause Code Description', 
+	rawview.URGENCY_CONDITION AS 'Cause Code ID', 
+	Count (*) AS Failures
+FROM	
+	(
+		#foreach ($rawtable in $rawtables)
+			select			
+				URGENCY_CONDITION
+			from dc.$rawtable
+			where
+				CATEGORY_ID = $categoryId
+				and #GET_DATETIME_RANGE()
+				and #GET_TAC_EXCLUSION()
+			#if($velocityCount < $rawtables.size())
+					union all
+			#end
+		#end
+	) as rawview
+	, DIM_E_GSM_CFA_URGENCY_CONDITION
+WHERE
+	DIM_E_GSM_CFA_URGENCY_CONDITION.URGENCY_CONDITION = rawview.URGENCY_CONDITION
+GROUP BY 
+	DIM_E_GSM_CFA_URGENCY_CONDITION.URGENCY_CONDITION_DESC,
+	rawview.URGENCY_CONDITION

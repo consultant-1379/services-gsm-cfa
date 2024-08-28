@@ -1,0 +1,75 @@
+##
+## GSM Call Failure Sub Cause Code Analysis by Access Area Hash ID (using raw tables)
+##
+## Velocity Parameter: 
+##
+## Named PreparedStatement Parameter:
+##
+##	   :HIER321_ID:   The cell hash id
+##     :CAUSE_CODE:    Cause Code id
+##     $display:       chart or grid
+##     $node:          cell node
+##
+#if($CATEGORY_ID != "")	
+	#set($columnsToSelect=["EXTENDED_CAUSE, IMSI, CATEGORY_ID"])
+	#set($columnsToFilter=["HIER321_ID", "CAUSE_GROUP", "CATEGORY_ID"])
+#else
+	#set($columnsToSelect=["EXTENDED_CAUSE, IMSI"])
+	#set($columnsToFilter=["HIER321_ID", "CAUSE_GROUP"])
+#end
+
+
+
+SELECT
+	rawview.EXTENDED_CAUSE as "Extended Cause ID",
+	DIM_E_GSM_CFA_EXTENDED_CAUSE.EXTENDED_CAUSE_DESC as "Extended Cause Value",
+	COUNT(*) as "Failures",
+	isnull(count(distinct(rawview.IMSI)),0) as "Impacted Subscribers"
+	,'$node' as "Node"
+	,'$CAUSE_VALUE' as "Cause Group"
+	,:CAUSE_GROUP as "Cause Group ID"
+	,:HIER321_ID as "HIER321_ID"
+	#if($CATEGORY_ID != "")	
+		,'$CATEGORY_ID' as "CATEGORY_ID"
+	#else
+		,'null' as "CATEGORY_ID"
+	#end
+	,'$failure_type' as 'Event Type'
+FROM
+
+#REPLACE_RAW_VIEW_WITH_RAW_TABLES_AND_FILTER_COLUMNS_WITH_TAC_EXCLUSION_SPECIFY_COLUMNS($TECH_PACK_LIST.getAllRawTables() "rawview" $columnsToFilter $columnsToSelect) 
+,DIM_E_GSM_CFA_EXTENDED_CAUSE
+WHERE 
+	rawview.EXTENDED_CAUSE *= DIM_E_GSM_CFA_EXTENDED_CAUSE.EXTENDED_CAUSE
+GROUP BY
+	rawview.EXTENDED_CAUSE,
+	DIM_E_GSM_CFA_EXTENDED_CAUSE.EXTENDED_CAUSE_DESC
+ORDER BY
+    Failures DESC
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	

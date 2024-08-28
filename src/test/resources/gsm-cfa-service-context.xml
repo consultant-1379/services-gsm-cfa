@@ -1,0 +1,189 @@
+<beans xmlns="http://www.springframework.org/schema/beans" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xsi:schemaLocation="http://www.springframework.org/schema/beans
+						http://www.springframework.org/schema/beans/spring-beans-3.0.xsd">
+
+    <bean id="gsmAccessAreaCFARankingService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.ranking.AccessAreaRankingService"/>
+
+    <bean id="gsmCauseCodeCFACallDropRankingService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.ranking.CauseCodeRankingService"/>
+
+    <bean id="gsmCallFailureTerminalRankingService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.ranking.TerminalRankingService"/>
+
+    <bean id="gsmCallFailureAccessAreaDetailedEventAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.AccessAreaDetailedService"/>
+
+    <bean id="gsmCallFailureBscDetailedEventAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.ControllerDetailedService"/>
+
+    <bean id="gsmCallFailureCallDropsDetailedEventAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.CCSubCCDetailedService"/>
+
+    <bean id="gsmCallFailureSubscriberCallDropDetailedEventAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.CallFailureSubscriberDetailedService"/>
+    
+   <bean id="gsmCallFailureSubscriberCallSetupDetailedEventAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.SubscriberCallSetupFailureDetailedService"/>
+          
+    <bean id="gsmCallFailureTerminalDetailedEventAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.TerminalDetailedService"/>
+
+    <bean id="gsmCallFailureAccessAreaSCCDetailedAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.AccessAreaSubCCDetailedService"/>
+
+    <bean id="gsmCallFailureControllerSubCauseCodeDetailedEventAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.ControllerSubCCDetailedService"/>
+          
+    <bean id="gsmCallFailureControllerSubCauseCodeDetailedAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.ControllerSubCCDetailedAnalysisService"/>
+
+    <bean id="gsmCallFailureSubscriberCallDropRankingService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.ranking.SubscriberRankingService"/>
+
+    <bean id="gsmCallFailureControllerCauseCodeAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.cc.ControllerCCService"/>
+          
+    <bean id="gsmCallFailureTerminalCauseCodeAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.cc.TerminalCCService" />
+          
+    <bean id="gsmCallFailureTerminalSubCauseCodeAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.cc.TerminalSubCCService" />
+
+    <bean id="gsmCallFailureControllerSubCauseCodeAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.cc.ControllerSubCCService"/>
+
+    <bean id="gsmCallFailureAccessAreaCauseCodeListService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.cc.AccessAreaCCListService"/>
+
+    <bean id="gsmCallFailureControllerCauseCodeListService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.cc.ControllerCCListService"/>
+
+    <bean id="gsmCallFailureAccessAreaCauseCodeAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.cc.AccessAreaCCService"/>
+
+    <bean id="gsmCallFailureAccessAreaSubCauseCodeAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.cc.AccessAreaSubCCService"/>
+
+    <bean id="subscriberDetailedEventAnalysisService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.events.DataConnectionSubscriberDetailedService"/>
+	
+	<bean id="subscriberDataVolumeAnalysisService" parent="genericService"
+		class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.datavolume.SubscriberDataVolumeService" />
+
+    <bean id="imsiGroupDetailedEventService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.events.SubscriberGroupDetailedService"/>
+
+    <bean id="imsiGroupFailureSummaryService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.events.SubscriberGroupSummaryService"/>
+
+    <bean id="controllerConnectionFailureRankingService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.ranking.ControllerFailureRankingService"/>
+
+    <bean id="gsmControllerCFARankingService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.ranking.ControllerRankingService"/>
+
+    <bean id="gsmAccessAreaCallFailureEventSummaryService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.AccessAreaSummaryService"/>
+
+    <bean id="gsmDataConnectionSubscriberDataVolumeRankingService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.ranking.SubscriberDataVolumeRankingService"/>
+
+    <bean id="gsmDataConnectionAccessAreaDataVolumeRankingService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.ranking.AccessAreaDataVolumeRankingService"/>
+
+    <bean id="gsmCallFailureBscEventAnlysisSummaryService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.ControllerSummaryService"/>
+          
+    <bean id="gsmCallFailureBscGroupEventAnlysisSummaryService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.ControllerGroupEventAnalysisService"/>
+          
+    <bean id="gsmCFASubCauseCodeEventSummaryService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.CCSubCCSummaryService"/>
+
+    <bean id="gsmDataConnectionControllerDataVolumeRankingService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.ranking.ControllerDataVolumeRankingService"/>
+
+    <bean id="causeCodeDetailedEventAnalysisImsi"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.events.SubscriberCCDetailedService"/>
+          
+	<bean id="connectionFailureByImsiRankingService"
+		parent="genericService"
+		class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.ranking.SubscriberFailureRankingService" />
+    
+    <bean id="gsmDataConnectionIMSICauseCodeListService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.cc.SubscriberCCListService"/>
+          
+    <bean id="gsmDataConnectionIMSICauseCodeService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.cc.SubscriberCCService"/>
+          
+     <bean id="gsmDataConnectionIMSISubCauseCodeService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.cc.SubscriberSCCService"/>     
+                    
+    <bean id="gsmDataConnectionIMSISuccessCauseCodeService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.cc.SubscriberSuccessCCService"/>
+          
+    <bean id="gsmControllerGroupBreakdownService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.cc.ControllerGroupBreakdownService"/>
+          
+          <bean id="gsmAccessAreaGroupBreakdownService" parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.cc.AccessAreaGroupBreakdownService"/>
+          
+    <bean id="subscriberBySubCauseCodeDetailedEventAnalysisService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.dataconnection.events.SubscriberSCCDetailedService"/>
+    
+    <bean id="roamingByOperatorService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.roaming.OperatorRoamingSummaryService"/>
+	
+	<bean id="roamingByCountryService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.roaming.CountryRoamingSummaryService"/>
+          
+    <bean id="roamingByCountryDetailService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.roaming.CountryRoamingDetailService"/>
+          
+    <bean id="roamingByOperatorDetailService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.roaming.OperatorRoamingDetailService"/>
+     
+     <bean id="roamingByOperatorAnalysisService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.roaming.OperatorDrillRoamingAnalysisService"/>     
+           
+    <bean id="subscriberSummaryService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.SubscriberSummaryService"/>
+          
+            <bean id="msisdnSubscriberSummaryService"
+          parent="genericService"
+          class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.MSISDNSubscriberSummaryService"/>
+          
+    <bean id="subscriberGroupBreakdownService"
+      parent="genericService"
+      class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.SubscriberGroupBreakdownService"/>          
+      
+    <bean id="accessAreaGroupSummary"
+    	parent="genericService"
+    	class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.AccessAreaGroupSummaryService"/> 
+    	
+    <bean id="countryCallFailureSummaryService"
+        parent="genericService"
+        class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.roaming.CountryCallFailureSummaryService"/>
+    	
+    <bean id="terminalSummaryService"
+    	parent="genericService"
+    	class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.TerminalSummaryService"/>
+    	
+    <bean id="accessAreaDistributionSummaryService"
+    	parent="genericService"
+    	class="com.ericsson.eniq.events.server.serviceprovider.impl.gsm.callfailure.events.AccessAreaDistributionSummaryService"/> 	 	 
+</beans>
